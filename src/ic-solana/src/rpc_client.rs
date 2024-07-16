@@ -632,4 +632,30 @@ impl RpcClient {
                 .unwrap_or_else(|| RpcError::Text("Unknown error".to_string()))),
         }
     }
+
+    ///
+    /// Returns minimum balance required to make account rent exempt.
+    ///
+    /// Method relies on the `getminimumbalanceforrentexemption` RPC call to get the balance:
+    ///   https://solana.com/docs/rpc/http/getminimumbalanceforrentexemption
+    ///
+    pub async fn get_minimum_balance_for_rent_exemption(
+        &self,
+        data_len: usize,
+    ) -> RpcResult<u64> {
+        let payload = RpcRequest::GetMinimumBalanceForRentExemption
+            .build_request_json(self.next_request_id(), json!([data_len]))
+            .to_string();
+
+        let response = self.call(&payload, 156).await?;
+
+        let json_response =
+            serde_json::from_str::<JsonRpcResponse<OptionalContext<u64>>>(&response)?;
+
+        if let Some(e) = json_response.error {
+            Err(e.into())
+        } else {
+            Ok(json_response.result.unwrap().parse_value())
+        }
+    }
 }

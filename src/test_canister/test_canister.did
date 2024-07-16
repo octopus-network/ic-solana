@@ -1,3 +1,6 @@
-service: (sol_canister: text) -> {
-    test : () -> ();
-};
+service : (text) -> {
+  create_mint_account : () -> ();
+  mint_to : () -> ();
+  request : () -> ();
+  transfer : () -> ();
+}

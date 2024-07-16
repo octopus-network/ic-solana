@@ -13,7 +13,7 @@ use ic_solana::types::{
     Signature, Transaction, UiAccountEncoding, UiTokenAmount,
 };
 use serde_bytes::ByteBuf;
-use serde_json::json;
+use serde_json::{from_str, json, Value};
 use state::{mutate_state, read_state, InitArgs, STATE};
 use std::str::FromStr;
 
@@ -43,11 +43,12 @@ pub async fn get_address() -> String {
 #[update]
 pub async fn request(method: String, params: String, max_response_bytes: u64) -> RpcResult<String> {
     let client = rpc_client();
+    let parsed_params: Value = from_str(&params).expect("Failed to parse JSON");
     let payload = serde_json::to_string(&json!({
         "jsonrpc": "2.0",
         "id": client.next_request_id(),
         "method": &method,
-        "params": params
+        "params": parsed_params
     }))?;
     client.call(&payload, max_response_bytes).await
 }
@@ -85,6 +86,18 @@ pub async fn sol_get_balance(pubkey: String) -> RpcResult<u64> {
             &Pubkey::from_str(&pubkey).expect("Invalid public key"),
             RpcContextConfig::default(),
         )
+        .await?;
+    Ok(balance)
+}
+
+///
+/// Returns minimum balance required to make account rent exempt.
+///
+#[update(name = "sol_getminimumbalanceforrentexemption")]
+pub async fn sol_get_minimum_balance_for_rent_exemption(data_len: usize) -> RpcResult<u64> {
+    let client = rpc_client();
+    let balance = client
+        .get_minimum_balance_for_rent_exemption(data_len)
         .await?;
     Ok(balance)
 }
