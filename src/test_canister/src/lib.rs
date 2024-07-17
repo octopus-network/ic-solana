@@ -188,6 +188,7 @@ async fn create_mint_account() {
     let response: Result<(RpcResult<String>,), _> =
         ic_cdk::call(sol_canister, "sol_latestBlockhash", ()).await;
     let blockhash = BlockHash::from_str(&response.unwrap().0.unwrap()).unwrap();
+
     let response: Result<(RpcResult<String>,), _> = ic_cdk::call(
         sol_canister,
         "sol_sendTransaction",
