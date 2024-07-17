@@ -6,16 +6,23 @@ use ic_management_canister_types::{
 };
 use ic_solana::request::RpcRequest;
 use ic_solana::rpc_client::RpcResult;
-use ic_solana::types::{AccountMeta, BlockHash, Instruction, Pubkey};
+use ic_solana::types::{
+    AccountMeta, BlockHash, Instruction, Message, Pubkey, Signature, Transaction,
+};
 
 use serde_bytes::ByteBuf;
 
 use std::cell::RefCell;
 use std::str::FromStr;
 
+pub mod extension;
 pub mod instruction_error;
 pub mod program_error;
+pub mod program_option;
+pub mod serialization;
 pub mod system_instruction;
+pub mod token_error;
+pub mod token_instruction;
 
 thread_local! {
     static SOL_PROVIDER_CANISTER: RefCell<Option<Principal>>  = const { RefCell::new(None) };
@@ -96,13 +103,13 @@ pub async fn transfer() {
         vec![
             AccountMeta::new(solana_address, true),
             AccountMeta::new(
-                Pubkey::from_str("AAAAUrmaZWvna6vHndc5LoVWUBmnj9sjxnvPz5U3qZGY").unwrap(),
+                Pubkey::from_str("3gghk7mHWtFsJcg6EZGK7sbHj3qW6ExUdZLs9q8GRjia").unwrap(),
                 false,
             ),
             AccountMeta::new(system_program_id, false),
         ],
     );
-    let to_pubkey = Pubkey::from_str("AAAAUrmaZWvna6vHndc5LoVWUBmnj9sjxnvPz5U3qZGY").unwrap();
+    let to_pubkey = Pubkey::from_str("3gghk7mHWtFsJcg6EZGK7sbHj3qW6ExUdZLs9q8GRjia").unwrap();
     let transfer_ix2 = system_instruction::transfer(&solana_address, &to_pubkey, 9_000_000);
 
     let response: Result<(RpcResult<String>,), _> = ic_cdk::call(
@@ -165,8 +172,53 @@ async fn create_mint_account() {
         &token22_program_id,
     );
     ic_cdk::println!("create_account_ix: {:?}", create_account_ix);
-    // TODO: build init account instruction
-    // let decimals = 9;
+
+    // build init account instruction
+    let decimals = 9;
+    let initialize_mint_ix = token_instruction::initialize_mint(
+        &token22_program_id,
+        &token_pubkey,
+        &from_pubkey,
+        Some(&from_pubkey),
+        decimals,
+    )
+    .unwrap();
+    ic_cdk::println!("initialize_mint_ix: {:?}", initialize_mint_ix);
+
+    // Get the latest blockhash
+    let response: Result<(RpcResult<String>,), _> =
+        ic_cdk::call(sol_canister, "sol_latestBlockhash", ()).await;
+    let blockhash = BlockHash::from_str(&response.unwrap().0.unwrap()).unwrap();
+    ic_cdk::println!("Latest Blockhash: {:?}", blockhash);
+
+    let instructions = vec![create_account_ix, initialize_mint_ix];
+    let message = Message::new_with_blockhash(&instructions, Some(&from_pubkey), &blockhash);
+    let mut tx = Transaction::new_unsigned(message);
+
+    //add signature
+    let sol_pubkey_derived_path = vec![ByteBuf::from(sol_canister.as_slice())];
+    let signature_0: Signature =
+        sign_with_eddsa(key_name.clone(), sol_pubkey_derived_path, tx.message_data())
+            .await
+            .try_into()
+            .expect("Invalid signature");
+    tx.add_signature(0, signature_0);
+    // tx.add_signature(1, signature_0);
+    let signature_1: Signature =
+        sign_with_eddsa(key_name, token_pubkey_derived_path, tx.message_data())
+            .await
+            .try_into()
+            .expect("Invalid signature");
+    tx.add_signature(1, signature_1);
+
+    ic_cdk::println!("tx with signaure: {:?}", tx);
+
+    // submit to solana
+    let response: Result<(RpcResult<String>,), _> =
+        ic_cdk::call(sol_canister, "sol_sendRawTransaction", (tx.to_string(),)).await;
+
+    let signature = response.unwrap().0.unwrap();
+    ic_cdk::println!("Signature: {:?}", signature);
 }
 
 // test mint token to dest address
@@ -294,5 +346,36 @@ mod test {
         assert_eq!(packed, expect);
         let unpacked = TokenInstruction::unpack(&expect).unwrap();
         assert_eq!(unpacked, check);
+        // let instruction_type = decode_instruction_type::<TokenInstruction>(&packed).unwrap();
+        // assert_eq!(instruction_type, PodTokenInstruction::InitializeMint);
+        // let (pod, pod_freeze_authority) =
+        //     decode_instruction_data_with_coption_pubkey::<InitializeMintData>(&packed).unwrap();
+        // assert_eq!(pod.decimals, decimals);
+        // assert_eq!(pod.mint_authority, mint_authority);
+        // assert_eq!(pod_freeze_authority, freeze_authority.into());
+
+        // let mint_authority = Pubkey::new_from_array([2u8; 32]);
+        // let freeze_authority = COption::Some(Pubkey::new_from_array([3u8; 32]));
+        // let check = TokenInstruction::InitializeMint {
+        //     decimals,
+        //     mint_authority,
+        //     freeze_authority,
+        // };
+        // let packed = check.pack();
+        // let mut expect = vec![0u8, 2];
+        // expect.extend_from_slice(&[2u8; 32]);
+        // expect.extend_from_slice(&[1]);
+        // expect.extend_from_slice(&[3u8; 32]);
+        // assert_eq!(packed, expect);
+        // let unpacked = TokenInstruction::unpack(&expect).unwrap();
+        // assert_eq!(unpacked, check);
+
+        // let instruction_type = decode_instruction_type::<PodTokenInstruction>(&packed).unwrap();
+        // assert_eq!(instruction_type, PodTokenInstruction::InitializeMint);
+        // let (pod, pod_freeze_authority) =
+        //     decode_instruction_data_with_coption_pubkey::<InitializeMintData>(&packed).unwrap();
+        // assert_eq!(pod.decimals, decimals);
+        // assert_eq!(pod.mint_authority, mint_authority);
+        // assert_eq!(pod_freeze_authority, freeze_authority.into());
     }
 }
