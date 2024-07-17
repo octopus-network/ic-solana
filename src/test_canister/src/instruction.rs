@@ -18,6 +18,7 @@ pub fn initialize_mint(
    // let k = Pubkey::from(sysvar::rent::id().to_bytes());
     let accounts = vec![
         AccountMeta::new(*mint_pubkey, false),
+        AccountMeta::new(*mint_authority_pubkey, true),
     ];
 
     Ok(Instruction {
