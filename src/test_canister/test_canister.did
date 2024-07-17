@@ -1,5 +1,7 @@
 service : (text) -> {
   create_mint_account : () -> ();
+  get_chainkey : () -> (text);
+  get_last_block_hash : () -> (text);
   mint_to : () -> ();
   request : () -> ();
   transfer : () -> ();

@@ -12,10 +12,12 @@ use serde_bytes::ByteBuf;
 
 use std::cell::RefCell;
 use std::str::FromStr;
+use ic_cdk::update;
 
 pub mod instruction_error;
 pub mod program_error;
 pub mod system_instruction;
+mod instruction;
 
 thread_local! {
     static SOL_PROVIDER_CANISTER: RefCell<Option<Principal>>  = const { RefCell::new(None) };
@@ -119,17 +121,27 @@ pub async fn transfer() {
     ic_cdk::println!("Signature: {:?}", signature);
 }
 
+#[update]
+async fn get_chainkey() -> String{
+
+    let sol_canister = sol_canister_id();
+    // Get the solana address associated with the caller
+    let response: Result<(String,), _> = ic_cdk::call(sol_canister, "get_address", ()).await;
+    let custom_address = Pubkey::from_str(&response.unwrap().0).unwrap();
+    custom_address.to_string()
+}
+
 // test create mint account and init it
 #[ic_cdk::update]
 async fn create_mint_account() {
     let sol_canister = sol_canister_id();
     // Get the solana address associated with the caller
     let response: Result<(String,), _> = ic_cdk::call(sol_canister, "get_address", ()).await;
-    let solana_address = Pubkey::from_str(&response.unwrap().0).unwrap();
-    ic_cdk::println!("solana_address: {}", solana_address);
-    // let extension_types: Vec<ExtensionType> = vec![];
-    // let params = "[{\"minContextSlot\":null}]".to_string();
+    let custom_address = Pubkey::from_str(&response.unwrap().0).unwrap();
+
+    ic_cdk::println!("solana_address: {}", custom_address);
     let space: usize = 82;
+    let decimals = 9u8;
 
     // get rent exemption
     let response: Result<(RpcResult<u64>,), _> = ic_cdk::call(
@@ -141,38 +153,70 @@ async fn create_mint_account() {
     let rent_exemption = response.unwrap().0.unwrap();
     ic_cdk::println!("rent_exemption: {:?}", rent_exemption);
 
-    // let system_program_id = Pubkey::from_str("11111111111111111111111111111111").unwrap();
     let token22_program_id =
         Pubkey::from_str("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb").unwrap();
-    let from_pubkey = solana_address;
 
     // gen token pubkey,or mint account pubkey
     let key_name = "test_key_1".to_string();
     let cur_canister_id = ic_cdk::id();
     let token_pubkey_derived_path = vec![ByteBuf::from(cur_canister_id.as_slice())];
-    let token_pubkey = Pubkey::try_from(
+    let token_mint = Pubkey::try_from(
         eddsa_public_key(key_name.clone(), token_pubkey_derived_path.clone()).await,
     )
     .unwrap();
-    ic_cdk::println!("token_pubkey: {:?}", token_pubkey);
+    ic_cdk::println!("token_pubkey: {:?}", token_mint);
 
     // build create account instruction
-    let create_account_ix = system_instruction::create_account(
-        &from_pubkey,
-        &token_pubkey,
+    let mut instructions = vec![system_instruction::create_account(
+        &custom_address,
+        &token_mint,
         rent_exemption,
         space as u64,
         &token22_program_id,
-    );
-    ic_cdk::println!("create_account_ix: {:?}", create_account_ix);
+    )];
+    ic_cdk::println!("create_account_ix: {:?}", instructions);
+
     // TODO: build init account instruction
-    // let decimals = 9;
+    instructions.push(
+        instruction::initialize_mint(
+            &token22_program_id,
+            &token_mint,
+            &custom_address,
+            None,
+            decimals).unwrap()
+    );
+    let response: Result<(RpcResult<String>,), _> =
+        ic_cdk::call(sol_canister, "sol_latestBlockhash", ()).await;
+    let blockhash = BlockHash::from_str(&response.unwrap().0.unwrap()).unwrap();
+    let response: Result<(RpcResult<String>,), _> = ic_cdk::call(
+        sol_canister,
+        "sol_sendTransaction",
+        (SendTransactionRequest {
+            instructions: vec![instructions[0].to_string(), instructions[1].to_string()],
+            recent_blockhash: Some(blockhash.to_string()),
+        },),
+    )
+        .await;
+    let signature = response.unwrap().0.unwrap();
+    ic_cdk::println!("Signature: {:?}", signature);
+
 }
 
 // test mint token to dest address
 #[ic_cdk::update]
-async fn mint_to() {}
+async fn mint_to() {
 
+
+}
+
+
+#[update]
+async fn get_last_block_hash() -> String {
+    let sol_canister = sol_canister_id();
+    let response: Result<(RpcResult<String>,), _> =
+        ic_cdk::call(sol_canister, "sol_latestBlockhash", ()).await;
+    response.unwrap().0.unwrap()
+}
 /// When setting up the test canister, we need to save a reference to the solana provider canister
 /// so that we can call it later.
 #[ic_cdk::init]
