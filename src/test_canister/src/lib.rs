@@ -6,7 +6,7 @@ use ic_management_canister_types::{
 };
 use ic_solana::request::RpcRequest;
 use ic_solana::rpc_client::RpcResult;
-use ic_solana::types::{AccountMeta, BlockHash, Instruction, Pubkey};
+use ic_solana::types::{AccountMeta, BlockHash, Instruction, Message, Pubkey, Transaction};
 
 use serde_bytes::ByteBuf;
 
@@ -124,12 +124,108 @@ pub async fn transfer() {
 #[update]
 async fn get_chainkey() -> String{
 
-    let sol_canister = sol_canister_id();
+/*    let sol_canister = sol_canister_id();
     // Get the solana address associated with the caller
     let response: Result<(String,), _> = ic_cdk::call(sol_canister, "get_address", ()).await;
     let custom_address = Pubkey::from_str(&response.unwrap().0).unwrap();
-    custom_address.to_string()
+    custom_address.to_string()*/
+
+
+    let key_name = "test_key_1".to_string();
+    let cur_canister_id = ic_cdk::id();
+    let token_pubkey_derived_path = vec![ByteBuf::from("custom_addr")];
+    let token_mint = Pubkey::try_from(
+        eddsa_public_key(key_name.clone(), token_pubkey_derived_path.clone()).await,
+    )
+        .unwrap();
+    token_mint.to_string()
+
 }
+
+// test create mint account and init it
+#[ic_cdk::update]
+async fn create_mint_account1() {
+
+    let space: usize = 82;
+    let decimals = 9u8;
+
+    // get rent exemption
+    let response: Result<(RpcResult<u64>,), _> = ic_cdk::call(
+        sol_canister_id(),
+        "sol_getminimumbalanceforrentexemption",
+        (space,),
+    )
+        .await;
+    let rent_exemption = response.unwrap().0.unwrap();
+
+    let token22_program_id =
+        Pubkey::from_str("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb").unwrap();
+
+    // gen token pubkey,or mint account pubkey
+    let key_name = "test_key_1".to_string();
+    let cur_canister_id = ic_cdk::id();
+    let token_pubkey_derived_path = vec![ByteBuf::from("tokken")];
+    let token_mint = Pubkey::try_from(
+        eddsa_public_key(key_name.clone(), token_pubkey_derived_path.clone()).await,
+    )
+        .unwrap();
+
+    let custom_derived_path = vec![ByteBuf::from("custom_addr")];
+    let custom_address = Pubkey::try_from(
+        eddsa_public_key(key_name.clone(), custom_derived_path.clone()).await,
+    )
+        .unwrap();
+
+
+    // build create account instruction
+    let mut instructions = vec![system_instruction::create_account(
+        &custom_address,
+        &token_mint,
+        rent_exemption,
+        space as u64,
+        &token22_program_id,
+    )];
+    ic_cdk::println!("create_account_ix: {:?}", instructions);
+
+    // TODO: build init account instruction
+    instructions.push(
+        instruction::initialize_mint(
+            &token22_program_id,
+            &token_mint,
+            &custom_address,
+            None,
+            decimals).unwrap()
+    );
+    let response: Result<(RpcResult<String>,), _> =
+        ic_cdk::call(sol_canister_id(), "sol_latestBlockhash", ()).await;
+    let blockhash = BlockHash::from_str(&response.unwrap().0.unwrap()).unwrap();
+    let message = Message::new_with_blockhash(instructions.iter().as_ref(), Some(&custom_address), &blockhash);
+    let mut tx = Transaction::new_unsigned(message);
+
+    let signature = sign_with_eddsa(key_name.clone(), custom_derived_path, tx.message_data())
+        .await
+        .try_into()
+        .expect("Invalid signature");
+
+    tx.add_signature(0, signature);
+
+    let signature = sign_with_eddsa(key_name.clone(), token_pubkey_derived_path, tx.message_data())
+        .await
+        .try_into()
+        .expect("Invalid signature");
+    tx.add_signature(1, signature);
+
+    let response: Result<(RpcResult<String>,), _> = ic_cdk::call(
+         sol_canister_id(),
+         "sol_sendRawTransaction",
+         (tx.to_string(),),
+     )
+         .await;
+     let signature = response.unwrap().0.unwrap();
+     ic_cdk::println!("Signature: {:?}", signature);
+
+}
+
 
 // test create mint account and init it
 #[ic_cdk::update]

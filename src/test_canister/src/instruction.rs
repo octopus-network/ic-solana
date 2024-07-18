@@ -1,3 +1,4 @@
+use std::str::FromStr;
 use ic_solana::types::{AccountMeta, Instruction, Pubkey};
 use crate::program_error::ProgramError;
 
@@ -15,10 +16,10 @@ pub fn initialize_mint(
     data.push(decimals);
     data.extend_from_slice(mint_authority_pubkey.as_ref());
     data.push(0);
-   // let k = Pubkey::from(sysvar::rent::id().to_bytes());
+    let pubkey = Pubkey::from_str("SysvarRent111111111111111111111111111111111").unwrap();
     let accounts = vec![
         AccountMeta::new(*mint_pubkey, false),
-        AccountMeta::new(*mint_authority_pubkey, true),
+        AccountMeta::new_readonly(pubkey, false),
     ];
 
     Ok(Instruction {
