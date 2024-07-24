@@ -1,13 +1,14 @@
 //! The [`ProgramError`] type and related definitions.
 
 #![allow(clippy::arithmetic_side_effects)]
+use crate::token::instruction_error::InstructionError;
 #[cfg(feature = "borsh")]
 use borsh::io::Error as BorshIoError;
 use serde::{Deserialize, Serialize};
-use crate::instruction_error::InstructionError;
 
 use {num_traits::ToPrimitive, std::convert::TryFrom, thiserror::Error};
 
+pub type ProgramClientError = Box<dyn std::error::Error + Send + Sync>;
 /// Reasons the program may fail
 #[derive(Clone, Debug, Deserialize, Eq, Error, PartialEq, Serialize)]
 pub enum ProgramError {

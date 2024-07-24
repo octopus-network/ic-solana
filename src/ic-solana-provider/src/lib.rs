@@ -9,8 +9,9 @@ use ic_solana::http_request_required_cycles;
 use ic_solana::rpc_client::RpcResult;
 use ic_solana::types::{
     Account, BlockHash, EncodedConfirmedTransactionWithStatusMeta, Instruction, Message, Pubkey,
-    RpcAccountInfoConfig, RpcContextConfig, RpcSendTransactionConfig, RpcTransactionConfig,
-    Signature, Transaction, UiAccountEncoding, UiTokenAmount,
+    RpcAccountInfoConfig, RpcContextConfig, RpcSendTransactionConfig, RpcSignatureStatusConfig,
+    RpcTransactionConfig, Signature, Transaction, TransactionStatus, UiAccountEncoding,
+    UiTokenAmount,
 };
 use serde_bytes::ByteBuf;
 use serde_json::{from_str, json, Value};
@@ -163,6 +164,31 @@ pub async fn sol_get_transaction(
     let signature = Signature::from_str(&signature).expect("Invalid signature");
     let response = client
         .get_transaction(&signature, RpcTransactionConfig::default())
+        .await?;
+    Ok(response)
+}
+
+///
+/// Returns the statuses of a list of transaction signatures.
+///
+#[update(name = "sol_getSignatureStatuses")]
+pub async fn sol_get_signature_statuses(
+    signatures: Vec<String>,
+) -> RpcResult<Vec<TransactionStatus>> {
+    let client = rpc_client();
+
+    let signatures = signatures
+        .iter()
+        .map(|s| Signature::from_str(s).unwrap())
+        .collect::<Vec<_>>();
+
+    let response = client
+        .get_signature_statuses(
+            &signatures,
+            RpcSignatureStatusConfig {
+                search_transaction_history: true,
+            },
+        )
         .await?;
     Ok(response)
 }

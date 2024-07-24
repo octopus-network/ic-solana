@@ -1,9 +1,5 @@
-service : (text) -> {
-  create_mint_account : () -> ();
-  create_mint_account1 : () -> ();
+service : (text, text) -> {
+  create_token : (text) -> (text);
+  create_token_with_metadata : (text) -> (text);
   get_chainkey : () -> (text);
-  get_last_block_hash : () -> (text);
-  mint_to : () -> ();
-  request : () -> ();
-  transfer : () -> ();
 }

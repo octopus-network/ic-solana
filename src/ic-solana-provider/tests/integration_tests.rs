@@ -2,8 +2,8 @@ mod common;
 
 use crate::common::{init, random_principal};
 use candid::encode_one;
-use pocket_ic::PocketIc;
 use ic_solana::types::Cluster;
+use pocket_ic::PocketIc;
 
 #[test]
 fn test_str() {

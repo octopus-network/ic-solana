@@ -639,10 +639,7 @@ impl RpcClient {
     /// Method relies on the `getminimumbalanceforrentexemption` RPC call to get the balance:
     ///   https://solana.com/docs/rpc/http/getminimumbalanceforrentexemption
     ///
-    pub async fn get_minimum_balance_for_rent_exemption(
-        &self,
-        data_len: usize,
-    ) -> RpcResult<u64> {
+    pub async fn get_minimum_balance_for_rent_exemption(&self, data_len: usize) -> RpcResult<u64> {
         let payload = RpcRequest::GetMinimumBalanceForRentExemption
             .build_request_json(self.next_request_id(), json!([data_len]))
             .to_string();

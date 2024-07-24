@@ -183,7 +183,7 @@ pub enum EncodedTransaction {
     Accounts(UiAccountsList),
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, CandidType)]
 #[serde(rename_all = "camelCase")]
 pub enum TransactionConfirmationStatus {
     Processed,
@@ -191,7 +191,7 @@ pub enum TransactionConfirmationStatus {
     Finalized,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, CandidType)]
 #[serde(rename_all = "camelCase")]
 pub struct TransactionStatus {
     pub slot: Slot,

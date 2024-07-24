@@ -1,6 +1,7 @@
+use crate::token::program_error::ProgramError;
+use crate::token::system_instruction::SYSVAR_ID;
+use crate::types::{AccountMeta, Instruction, Pubkey};
 use std::str::FromStr;
-use ic_solana::types::{AccountMeta, Instruction, Pubkey};
-use crate::program_error::ProgramError;
 
 /// Creates a `InitializeMint` instruction.
 pub fn initialize_mint(
@@ -10,25 +11,30 @@ pub fn initialize_mint(
     freeze_authority_pubkey: Option<&Pubkey>,
     decimals: u8,
 ) -> Result<Instruction, ProgramError> {
-
-    let mut data:  Vec<u8> = vec![];
+    let mut data: Vec<u8> = vec![];
     data.push(0);
     data.push(decimals);
     data.extend_from_slice(mint_authority_pubkey.as_ref());
-    data.push(0);
-    let pubkey = Pubkey::from_str("SysvarRent111111111111111111111111111111111").unwrap();
+    match freeze_authority_pubkey {
+        None => {
+            data.push(0);
+        }
+        Some(p) => {
+            data.push(1);
+            data.extend_from_slice(&p.to_bytes());
+        }
+    }
+    let pubkey = Pubkey::from_str(SYSVAR_ID).unwrap();
     let accounts = vec![
         AccountMeta::new(*mint_pubkey, false),
         AccountMeta::new_readonly(pubkey, false),
     ];
-
     Ok(Instruction {
         program_id: *token_program_id,
         accounts,
         data,
     })
 }
-
 
 /// Creates a `MintTo` instruction.
 pub fn mint_to(
@@ -39,7 +45,7 @@ pub fn mint_to(
     signer_pubkeys: &[&Pubkey],
     amount: u64,
 ) -> Result<Instruction, ProgramError> {
-   // check_spl_token_program_account(token_program_id)?;
+    // check_spl_token_program_account(token_program_id)?;
     let mut data: Vec<u8> = vec![];
     data.push(7);
     data.extend_from_slice(&amount.to_le_bytes());
