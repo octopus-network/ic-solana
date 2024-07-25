@@ -149,7 +149,7 @@ impl SolanaClient {
         let r: Result<(RpcResult<Option<Account>>,), _> = ic_cdk::call(
             self.sol_canister_id,
             "sol_getAccountInfo",
-            (owner.to_string(),),
+            (associated_account.to_string(),),
         )
         .await;
         let resp = r
@@ -252,7 +252,6 @@ impl SolanaClient {
             token_info.uri,
         ));
 
-        ic_cdk::println!("---------- {:?}", instructions.clone());
         let _tx_hash = self
             .send_raw_transaction(
                 instructions.as_slice(),

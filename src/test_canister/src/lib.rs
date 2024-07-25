@@ -38,7 +38,7 @@ async fn init(sol_canister: String, schnorr_canister: String) {
 }
 
 #[update]
-async fn get_chainkey() -> String {
+async fn get_payer() -> String {
     let payer_path = vec![ByteBuf::from("custom_payer")];
     let c = SolanaClient::derive_account(
         schnorr_canister(),
@@ -58,12 +58,11 @@ async fn create_token_with_metadata(payer_addr: String) -> String {
         chainkey_name: "test_key_1".to_string(),
         schnorr_canister: schnorr_canister(),
     };
-
     let token_info = TokenCreateInfo {
-        name: "YHTNN".to_string(),
-        symbol: "YHTNN".to_string(),
+        name: "YHTCC".to_string(),
+        symbol: "YHTCC".to_string(),
         decimals: 2,
-        uri: "https://raw.githubusercontent.com/solana-developers/opos-asset/main/assets/DeveloperPortal/metadata.json".to_string(),
+        uri: "".to_string(),
     };
     let r = s.create_mint_with_metadata(token_info).await.unwrap();
     r.to_string()
@@ -82,7 +81,7 @@ async fn create_token(payer_addr: String) -> String {
         name: "YHTX".to_string(),
         symbol: "YHTX".to_string(),
         decimals: 2,
-        uri: "https://raw.githubusercontent.com/solana-developers/opos-asset/main/assets/DeveloperPortal/metadata.json".to_string(),
+        uri: "".to_string(),
     };
     let r = s.create_mint(token_info).await.unwrap();
     r.to_string()
