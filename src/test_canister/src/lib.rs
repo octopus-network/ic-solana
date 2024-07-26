@@ -6,7 +6,7 @@ use ic_cdk::update;
 use serde_bytes::ByteBuf;
 
 use ic_solana::token::{SolanaClient, TokenCreateInfo};
-use ic_solana::types::Pubkey;
+use ic_solana::types::{EncodedConfirmedTransactionWithStatusMeta, Pubkey};
 
 mod utils;
 
@@ -35,6 +35,22 @@ async fn init(sol_canister: String, schnorr_canister: String) {
         *canister.borrow_mut() =
             Some(Principal::from_text(schnorr_canister).expect("Invalid principal"));
     });
+}
+
+#[update]
+async fn query_transaction(
+    payer: String,
+    tx_hash: String,
+) -> EncodedConfirmedTransactionWithStatusMeta {
+    let s = SolanaClient {
+        sol_canister_id: sol_canister_id(),
+        payer: Pubkey::from_str(payer.as_str()).unwrap(),
+        payer_derive_path: vec![ByteBuf::from("custom_payer")],
+        chainkey_name: "test_key_1".to_string(),
+        schnorr_canister: schnorr_canister(),
+    };
+    let r = s.query_transaction(tx_hash).await.unwrap();
+    r
 }
 
 #[update]

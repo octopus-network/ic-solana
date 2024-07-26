@@ -49,12 +49,13 @@ impl SolanaClient {
         &self,
         txhash: String,
     ) -> anyhow::Result<EncodedConfirmedTransactionWithStatusMeta> {
-        let response: Result<(RpcResult<EncodedConfirmedTransactionWithStatusMeta>,), _> =
+        let response: Result<(RpcResult<String>,), _> =
             ic_cdk::call(self.sol_canister_id, "sol_getTransaction", (txhash,)).await;
         let tx = response
-            .map_err(|e| anyhow!(format!("create associated account err: {:?}", e)))?
+            .map_err(|e| anyhow!(format!("query transaction err: {:?}", e)))?
             .0
-            .map_err(|e| anyhow!(format!("create associated account rpc error: {:?}", e)))?;
+            .map_err(|e| anyhow!(format!("query transaction rpc error: {:?}", e)))?;
+        let tx = serde_json::from_str(tx.as_str()).unwrap();
         Ok(tx)
     }
 
