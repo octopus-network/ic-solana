@@ -3,6 +3,7 @@ use std::str::FromStr;
 
 use candid::{CandidType, Principal};
 use ic_cdk::update;
+use serde::{Deserialize, Serialize};
 use serde_bytes::ByteBuf;
 
 use ic_solana::token::{SolanaClient, TokenCreateInfo};
@@ -22,6 +23,16 @@ fn sol_canister_id() -> Principal {
 
 fn schnorr_canister() -> Principal {
     SCHNORR_CANISTER.with_borrow(|canister| canister.expect("schnorr canister no initialized"))
+}
+
+#[derive(CandidType, Serialize, Deserialize, Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub enum Encoding {
+    Binary, // Legacy. Retained for RPC backwards compatibility
+    Base64,
+    Base58,
+    Json,
+    JsonParsed,
 }
 
 #[ic_cdk::init]
@@ -101,6 +112,26 @@ async fn create_token(payer_addr: String) -> String {
     };
     let r = s.create_mint(token_info).await.unwrap();
     r.to_string()
+}
+
+#[update]
+async fn get_transaction(signature: String) {
+    let payer = SolanaClient::derive_account(
+        schnorr_canister(),
+        "test_key_1".to_string(),
+        "custom_payer".to_string(),
+    )
+    .await;
+    let s = SolanaClient {
+        sol_canister_id: sol_canister_id(),
+        payer: payer,
+        payer_derive_path: vec![ByteBuf::from("custom_payer")],
+        chainkey_name: "test_key_1".to_string(),
+        schnorr_canister: schnorr_canister(),
+    };
+    let r = s.query_transaction(signature).await.unwrap();
+    ic_cdk::println!("transaction detail: {:?}", r);
+    // serde_json::to_string(&r).unwrap()
 }
 
 ic_cdk::export_candid!();

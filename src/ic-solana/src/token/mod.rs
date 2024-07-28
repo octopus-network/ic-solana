@@ -49,13 +49,36 @@ impl SolanaClient {
         &self,
         txhash: String,
     ) -> anyhow::Result<EncodedConfirmedTransactionWithStatusMeta> {
+        let transaction: Result<(RpcResult<EncodedConfirmedTransactionWithStatusMeta>,), _> =
+            ic_cdk::call(
+                self.sol_canister_id,
+                "sol_getTransaction",
+                (txhash.to_string(),),
+            )
+            .await;
+        ic_cdk::println!("sol_getTransaction response: {:#?}", transaction);
+
+        // let response: Result<RpcResult<EncodedConfirmedTransactionWithStatusMeta>, _> =
+        //     ic_cdk::call(self.sol_canister_id, "sol_getTransaction", (txhash,)).await;
+        let tx = transaction
+            .map_err(|e| anyhow!(format!("call sol_getTransaction err: {:?}", e)))?
+            .0
+            .map_err(|e| anyhow!(format!("sol_getTransaction rpc error: {:?}", e)))?;
+        Ok(tx)
+    }
+
+    // parse the redeem transaction via signatrure,return (transition fee info (sender,receiver and amount) ,burned info (account and amount),receiver include memo)
+    //
+    pub async fn parse_redeem_transaction(
+        &self,
+        signature: String,
+    ) -> anyhow::Result<EncodedConfirmedTransactionWithStatusMeta> {
         let response: Result<(RpcResult<String>,), _> =
             ic_cdk::call(self.sol_canister_id, "sol_getTransaction", (txhash,)).await;
         let tx = response
-            .map_err(|e| anyhow!(format!("query transaction err: {:?}", e)))?
+            .map_err(|e| anyhow!(format!("call sol_getTransaction err: {:?}", e)))?
             .0
-            .map_err(|e| anyhow!(format!("query transaction rpc error: {:?}", e)))?;
-        let tx = serde_json::from_str(tx.as_str()).unwrap();
+            .map_err(|e| anyhow!(format!("sol_getTransaction rpc error: {:?}", e)))?;
         Ok(tx)
     }
 
@@ -164,6 +187,7 @@ impl SolanaClient {
                     .await?;
                 Ok(associated_account)
             }
+            //TODO: confime if create_associated_token_account?
             Some(_) => Ok(associated_account),
         }
     }
@@ -292,7 +316,7 @@ impl SolanaClient {
         )
         .await
         .try_into()
-        .map_err(|e| anyhow!("invalid signature"))?;
+        .map_err(|e| anyhow!("invalid signature :{:?}", e))?;
         Ok(signature)
     }
 
@@ -324,5 +348,620 @@ impl SolanaClient {
             .map_err(|e| anyhow!(format!("send raw transaction rpc error: {:?}", e)))?;
         ic_cdk::println!("{}", signature);
         Ok(signature)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use serde::{Deserialize, Serialize};
+    use serde_json::{from_value, Value};
+
+    use crate::rpc_client::JsonRpcResponse;
+    // #[derive(Debug, Serialize, Deserialize, Clone)]
+    // pub struct JsonRpcError {
+    //     pub code: i64,
+    //     pub message: String,
+    // }
+
+    // #[derive(Serialize, Deserialize, Debug)]
+    // struct JsonRpcResponse {
+    //     jsonrpc: String,
+    //     result: TransactionResult,
+    //     // error: Option<JsonRpcError>,
+    //     id: u64,
+    // }
+
+    #[derive(Serialize, Deserialize, Debug)]
+    #[serde(rename_all = "camelCase")]
+    struct TransactionResult {
+        block_time: Option<u64>,
+        meta: Meta,
+        slot: u64,
+        transaction: Transaction,
+    }
+
+    #[derive(Serialize, Deserialize, Debug)]
+    #[serde(rename_all = "camelCase")]
+    struct Meta {
+        compute_units_consumed: u64,
+        err: Option<Value>,
+        fee: u64,
+        inner_instructions: Vec<Value>,
+        log_messages: Vec<String>,
+        post_balances: Vec<u64>,
+        post_token_balances: Vec<Value>,
+        pre_balances: Vec<u64>,
+        pre_token_balances: Vec<Value>,
+        rewards: Vec<Value>,
+        status: Status,
+    }
+
+    #[derive(Serialize, Deserialize, Debug)]
+    struct Status {
+        #[serde(rename = "Ok")]
+        ok: Option<Value>,
+    }
+
+    #[derive(Serialize, Deserialize, Debug)]
+    struct Transaction {
+        message: Message,
+        signatures: Vec<String>,
+    }
+
+    #[derive(Serialize, Deserialize, Debug)]
+    #[serde(rename_all = "camelCase")]
+    struct Message {
+        account_keys: Vec<AccountKey>,
+        instructions: Vec<Instruction>,
+        recent_blockhash: String,
+    }
+
+    #[derive(Serialize, Deserialize, Debug)]
+    struct AccountKey {
+        pubkey: String,
+        signer: bool,
+        source: String,
+        writable: bool,
+    }
+
+    #[derive(Serialize, Deserialize, Debug)]
+    #[serde(rename_all = "camelCase")]
+    struct Instruction {
+        #[serde(flatten)]
+        parsed: Option<Value>,
+        program: String,
+        program_id: String,
+        stack_height: Option<u64>,
+    }
+
+    #[derive(Serialize, Deserialize, Debug)]
+    // #[serde(untagged)]
+    struct ParsedValue {
+        parsed: ParsedInstruction,
+    }
+
+    #[derive(Serialize, Deserialize, Debug)]
+    #[serde(untagged)]
+    enum ParsedInstruction {
+        InstructionEnum(Value),
+        Memo(String),
+    }
+
+    #[derive(Serialize, Deserialize, Debug)]
+    #[serde(untagged)]
+    enum InstructionEnum {
+        TransferInstruction(ParsedTransfer),
+        BurnInstrcution(ParsedBurn),
+    }
+
+    #[derive(Serialize, Deserialize, Debug)]
+    #[serde(rename_all = "camelCase")]
+    struct ParsedTransfer {
+        info: Transfer,
+        #[serde(rename = "type")]
+        instr_type: String,
+    }
+    #[derive(Serialize, Deserialize, Debug)]
+    struct Transfer {
+        destination: Option<String>,
+        lamports: Option<u64>,
+        source: Option<String>,
+    }
+
+    #[derive(Serialize, Deserialize, Debug)]
+    #[serde(rename_all = "camelCase")]
+    struct ParsedBurn {
+        info: Burn,
+        #[serde(rename = "type")]
+        instr_type: String,
+    }
+
+    #[derive(Serialize, Deserialize, Debug)]
+    #[serde(rename_all = "camelCase")]
+    struct Burn {
+        account: Option<String>,
+        authority: Option<String>,
+        mint: Option<String>,
+        token_amount: Option<TokenAmount>,
+    }
+
+    #[derive(Serialize, Deserialize, Debug)]
+    #[serde(rename_all = "camelCase")]
+    struct TokenAmount {
+        amount: Option<String>,
+        decimals: Option<u8>,
+        ui_amount: Option<f64>,
+        ui_amount_string: Option<String>,
+    }
+
+    #[test]
+    fn test_parse_transfer_with_memo_tx() {
+        let json_data = r#"
+        {
+            "jsonrpc": "2.0",
+            "result": {
+                "blockTime": 1721963687,
+                "meta": {
+                    "computeUnitsConsumed": 7350,
+                    "err": null,
+                    "fee": 5000,
+                    "innerInstructions": [],
+                    "logMessages": [
+                        "Program 11111111111111111111111111111111 invoke [1]",
+                        "Program 11111111111111111111111111111111 success",
+                        "Program MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr invoke [1]",
+                        "Program log: Memo (len 16): \"receiver_address\"",
+                        "Program MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr consumed 7200 of 399850 compute units",
+                        "Program MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr success"
+                    ],
+                    "postBalances": [
+                        5999995000,
+                        12008970000,
+                        1,
+                        521498880
+                    ],
+                    "postTokenBalances": [],
+                    "preBalances": [
+                        8000000000,
+                        10008970000,
+                        1,
+                        521498880
+                    ],
+                    "preTokenBalances": [],
+                    "rewards": [],
+                    "status": {
+                        "Ok": null
+                    }
+                },
+                "slot": 314272704,
+                "transaction": {
+                    "message": {
+                        "accountKeys": [
+                            {
+                                "pubkey": "74SqAGc8wHgkwNx2Hqiz1UdKkZL1gCCvsRRwN2tSm8Ny",
+                                "signer": true,
+                                "source": "transaction",
+                                "writable": true
+                            },
+                            {
+                                "pubkey": "3gghk7mHWtFsJcg6EZGK7sbHj3qW6ExUdZLs9q8GRjia",
+                                "signer": false,
+                                "source": "transaction",
+                                "writable": true
+                            },
+                            {
+                                "pubkey": "11111111111111111111111111111111",
+                                "signer": false,
+                                "source": "transaction",
+                                "writable": false
+                            },
+                            {
+                                "pubkey": "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr",
+                                "signer": false,
+                                "source": "transaction",
+                                "writable": false
+                            }
+                        ],
+                        "instructions": [
+                            {
+                                "parsed": {
+                                    "info": {
+                                        "destination": "3gghk7mHWtFsJcg6EZGK7sbHj3qW6ExUdZLs9q8GRjia",
+                                        "lamports": 2000000000,
+                                        "source": "74SqAGc8wHgkwNx2Hqiz1UdKkZL1gCCvsRRwN2tSm8Ny"
+                                    },
+                                    "type": "transfer"
+                                },
+                                "program": "system",
+                                "programId": "11111111111111111111111111111111",
+                                "stackHeight": null
+                            },
+                            {
+                                "parsed": "receiver_address",
+                                "program": "spl-memo",
+                                "programId": "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr",
+                                "stackHeight": null
+                            }
+                        ],
+                        "recentBlockhash": "BVoPc2NaRNnGBrFssmapBZTycQGyXzxtFn1Uciy52GTT"
+                    },
+                    "signatures": [
+                        "zPTNV4iYR4xdtMupgkFfBYuL99VpdByNGjahNrMjRfWr2FWCRJeMiq3za5pSWT1Jj8z9bG3fBknWfmdL7XFRxud"
+                    ]
+                }
+            },
+            "id": 0
+        }
+        "#;
+
+        let transaction_response =
+            serde_json::from_str::<JsonRpcResponse<TransactionResult>>(json_data).unwrap();
+        // let transaction_response: JsonRpcResponse = serde_json::from_str(json_data).unwrap();
+
+        println!("transaction_response: {:#?}", transaction_response);
+        for instruction in &transaction_response
+            .result
+            .unwrap()
+            .transaction
+            .message
+            .instructions
+        {
+            if let Some(parsed_value) = &instruction.parsed {
+                if let Ok(parsed_instr) = from_value::<ParsedValue>(parsed_value.clone()) {
+                    println!("Parsed Instruction: {:#?}", parsed_instr);
+                } else if let Ok(parsed_str) = from_value::<String>(parsed_value.clone()) {
+                    println!("Parsed String: {:#?}", parsed_str);
+                } else {
+                    println!("Unknown Parsed Value: {:#?}", parsed_value);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_parse_burn_with_memo_tx() {
+        let json_data = r#"
+        {
+    "jsonrpc": "2.0",
+    "result": {
+        "blockTime": 1722149061,
+        "meta": {
+            "computeUnitsConsumed": 36589,
+            "err": null,
+            "fee": 5000,
+            "innerInstructions": [],
+            "logMessages": [
+                "Program MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr invoke [1]",
+                "Program log: Signed by 3gghk7mHWtFsJcg6EZGK7sbHj3qW6ExUdZLs9q8GRjia",
+                "Program log: Memo (len 44): \"3gghk7mHWtFsJcg6EZGK7sbHj3qW6ExUdZLs9q8GRjia\"",
+                "Program MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr consumed 30755 of 400000 compute units",
+                "Program MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr success",
+                "Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb invoke [1]",
+                "Program log: Instruction: BurnChecked",
+                "Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb consumed 5834 of 369245 compute units",
+                "Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb success"
+            ],
+            "postBalances": [
+                12008965000,
+                3883680,
+                2074080,
+                521498880,
+                1141440
+            ],
+            "postTokenBalances": [
+                {
+                    "accountIndex": 2,
+                    "mint": "AN2n5RYpqH9FfgD5zHFZS2wkezPTAhrukbPYvbx4ZEAj",
+                    "owner": "3gghk7mHWtFsJcg6EZGK7sbHj3qW6ExUdZLs9q8GRjia",
+                    "programId": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+                    "uiTokenAmount": {
+                        "amount": "90000000000",
+                        "decimals": 9,
+                        "uiAmount": 90.0,
+                        "uiAmountString": "90"
+                    }
+                }
+            ],
+            "preBalances": [
+                12008970000,
+                3883680,
+                2074080,
+                521498880,
+                1141440
+            ],
+            "preTokenBalances": [
+                {
+                    "accountIndex": 2,
+                    "mint": "AN2n5RYpqH9FfgD5zHFZS2wkezPTAhrukbPYvbx4ZEAj",
+                    "owner": "3gghk7mHWtFsJcg6EZGK7sbHj3qW6ExUdZLs9q8GRjia",
+                    "programId": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+                    "uiTokenAmount": {
+                        "amount": "100000000000",
+                        "decimals": 9,
+                        "uiAmount": 100.0,
+                        "uiAmountString": "100"
+                    }
+                }
+            ],
+            "rewards": [],
+            "status": {
+                "Ok": null
+            }
+        },
+        "slot": 314771079,
+        "transaction": {
+            "message": {
+                "accountKeys": [
+                    {
+                        "pubkey": "3gghk7mHWtFsJcg6EZGK7sbHj3qW6ExUdZLs9q8GRjia",
+                        "signer": true,
+                        "source": "transaction",
+                        "writable": true
+                    },
+                    {
+                        "pubkey": "AN2n5RYpqH9FfgD5zHFZS2wkezPTAhrukbPYvbx4ZEAj",
+                        "signer": false,
+                        "source": "transaction",
+                        "writable": true
+                    },
+                    {
+                        "pubkey": "D58qMHmDAoEaviG8s9VmGwRhcw2z1apJHt6RnPtgxdVj",
+                        "signer": false,
+                        "source": "transaction",
+                        "writable": true
+                    },
+                    {
+                        "pubkey": "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr",
+                        "signer": false,
+                        "source": "transaction",
+                        "writable": false
+                    },
+                    {
+                        "pubkey": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+                        "signer": false,
+                        "source": "transaction",
+                        "writable": false
+                    }
+                ],
+                "instructions": [
+                    {
+                        "parsed": "3gghk7mHWtFsJcg6EZGK7sbHj3qW6ExUdZLs9q8GRjia",
+                        "program": "spl-memo",
+                        "programId": "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr",
+                        "stackHeight": null
+                    },
+                    {
+                        "parsed": {
+                            "info": {
+                                "account": "D58qMHmDAoEaviG8s9VmGwRhcw2z1apJHt6RnPtgxdVj",
+                                "authority": "3gghk7mHWtFsJcg6EZGK7sbHj3qW6ExUdZLs9q8GRjia",
+                                "mint": "AN2n5RYpqH9FfgD5zHFZS2wkezPTAhrukbPYvbx4ZEAj",
+                                "tokenAmount": {
+                                    "amount": "10000000000",
+                                    "decimals": 9,
+                                    "uiAmount": 10.0,
+                                    "uiAmountString": "10"
+                                }
+                            },
+                            "type": "burnChecked"
+                        },
+                        "program": "spl-token",
+                        "programId": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+                        "stackHeight": null
+                    }
+                ],
+                "recentBlockhash": "HXnTGc3GHrcAuDkAJKyH7wStMii51vYYuMyBGpkAMt61"
+            },
+            "signatures": [
+                "5FHvSDvAmsUnyBRurtsJ3RjMz45CtqUjBP5FvQBQiXBCHfXwb3xqP7cBXGnuDepeGwCR8cE51NJVZY2GHms4GG1Z"
+            ]
+        }
+    },
+    "id": 1
+}
+        "#;
+
+        let transaction_response =
+            serde_json::from_str::<JsonRpcResponse<TransactionResult>>(json_data).unwrap();
+        // let transaction_response: JsonRpcResponse = serde_json::from_str(json_data).unwrap();
+
+        println!("transaction_response: {:#?}", transaction_response);
+        for instruction in &transaction_response
+            .result
+            .unwrap()
+            .transaction
+            .message
+            .instructions
+        {
+            if let Some(parsed_value) = &instruction.parsed {
+                if let Ok(parsed_instr) = from_value::<ParsedValue>(parsed_value.clone()) {
+                    println!("Parsed Instruction: {:#?}", parsed_instr);
+                } else if let Ok(parsed_str) = from_value::<String>(parsed_value.clone()) {
+                    println!("Parsed String: {:#?}", parsed_str);
+                } else {
+                    println!("Unknown Parsed Value: {:#?}", parsed_value);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_parse_transfer_burn_with_memo_tx() {
+        let json_data = r#"
+    {
+"jsonrpc": "2.0",
+"result": {
+    "blockTime": 1722149061,
+    "meta": {
+        "computeUnitsConsumed": 36589,
+        "err": null,
+        "fee": 5000,
+        "innerInstructions": [],
+        "logMessages": [
+            "Program MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr invoke [1]",
+            "Program log: Signed by 3gghk7mHWtFsJcg6EZGK7sbHj3qW6ExUdZLs9q8GRjia",
+            "Program log: Memo (len 44): \"3gghk7mHWtFsJcg6EZGK7sbHj3qW6ExUdZLs9q8GRjia\"",
+            "Program MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr consumed 30755 of 400000 compute units",
+            "Program MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr success",
+            "Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb invoke [1]",
+            "Program log: Instruction: BurnChecked",
+            "Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb consumed 5834 of 369245 compute units",
+            "Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb success"
+        ],
+        "postBalances": [
+            12008965000,
+            3883680,
+            2074080,
+            521498880,
+            1141440
+        ],
+        "postTokenBalances": [
+            {
+                "accountIndex": 2,
+                "mint": "AN2n5RYpqH9FfgD5zHFZS2wkezPTAhrukbPYvbx4ZEAj",
+                "owner": "3gghk7mHWtFsJcg6EZGK7sbHj3qW6ExUdZLs9q8GRjia",
+                "programId": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+                "uiTokenAmount": {
+                    "amount": "90000000000",
+                    "decimals": 9,
+                    "uiAmount": 90.0,
+                    "uiAmountString": "90"
+                }
+            }
+        ],
+        "preBalances": [
+            12008970000,
+            3883680,
+            2074080,
+            521498880,
+            1141440
+        ],
+        "preTokenBalances": [
+            {
+                "accountIndex": 2,
+                "mint": "AN2n5RYpqH9FfgD5zHFZS2wkezPTAhrukbPYvbx4ZEAj",
+                "owner": "3gghk7mHWtFsJcg6EZGK7sbHj3qW6ExUdZLs9q8GRjia",
+                "programId": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+                "uiTokenAmount": {
+                    "amount": "100000000000",
+                    "decimals": 9,
+                    "uiAmount": 100.0,
+                    "uiAmountString": "100"
+                }
+            }
+        ],
+        "rewards": [],
+        "status": {
+            "Ok": null
+        }
+    },
+    "slot": 314771079,
+    "transaction": {
+        "message": {
+            "accountKeys": [
+                {
+                    "pubkey": "3gghk7mHWtFsJcg6EZGK7sbHj3qW6ExUdZLs9q8GRjia",
+                    "signer": true,
+                    "source": "transaction",
+                    "writable": true
+                },
+                {
+                    "pubkey": "AN2n5RYpqH9FfgD5zHFZS2wkezPTAhrukbPYvbx4ZEAj",
+                    "signer": false,
+                    "source": "transaction",
+                    "writable": true
+                },
+                {
+                    "pubkey": "D58qMHmDAoEaviG8s9VmGwRhcw2z1apJHt6RnPtgxdVj",
+                    "signer": false,
+                    "source": "transaction",
+                    "writable": true
+                },
+                {
+                    "pubkey": "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr",
+                    "signer": false,
+                    "source": "transaction",
+                    "writable": false
+                },
+                {
+                    "pubkey": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+                    "signer": false,
+                    "source": "transaction",
+                    "writable": false
+                }
+            ],
+            "instructions": [
+                {
+                    "parsed": "3gghk7mHWtFsJcg6EZGK7sbHj3qW6ExUdZLs9q8GRjia",
+                    "program": "spl-memo",
+                    "programId": "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr",
+                    "stackHeight": null
+                },
+                {
+                    "parsed": {
+                        "info": {
+                            "account": "D58qMHmDAoEaviG8s9VmGwRhcw2z1apJHt6RnPtgxdVj",
+                            "authority": "3gghk7mHWtFsJcg6EZGK7sbHj3qW6ExUdZLs9q8GRjia",
+                            "mint": "AN2n5RYpqH9FfgD5zHFZS2wkezPTAhrukbPYvbx4ZEAj",
+                            "tokenAmount": {
+                                "amount": "10000000000",
+                                "decimals": 9,
+                                "uiAmount": 10.0,
+                                "uiAmountString": "10"
+                            }
+                        },
+                        "type": "burnChecked"
+                    },
+                    "program": "spl-token",
+                    "programId": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+                    "stackHeight": null
+                },
+                {
+                                "parsed": {
+                                    "info": {
+                                        "destination": "3gghk7mHWtFsJcg6EZGK7sbHj3qW6ExUdZLs9q8GRjia",
+                                        "lamports": 2000000000,
+                                        "source": "74SqAGc8wHgkwNx2Hqiz1UdKkZL1gCCvsRRwN2tSm8Ny"
+                                    },
+                                    "type": "transfer"
+                                },
+                                "program": "system",
+                                "programId": "11111111111111111111111111111111",
+                                "stackHeight": null
+                            }
+            ],
+            "recentBlockhash": "HXnTGc3GHrcAuDkAJKyH7wStMii51vYYuMyBGpkAMt61"
+        },
+        "signatures": [
+            "5FHvSDvAmsUnyBRurtsJ3RjMz45CtqUjBP5FvQBQiXBCHfXwb3xqP7cBXGnuDepeGwCR8cE51NJVZY2GHms4GG1Z"
+        ]
+    }
+},
+"id": 1
+}
+    "#;
+
+        let transaction_response =
+            serde_json::from_str::<JsonRpcResponse<TransactionResult>>(json_data).unwrap();
+        // let transaction_response: JsonRpcResponse = serde_json::from_str(json_data).unwrap();
+
+        println!("transaction_response: {:#?}", transaction_response);
+        for instruction in &transaction_response
+            .result
+            .unwrap()
+            .transaction
+            .message
+            .instructions
+        {
+            if let Some(parsed_value) = &instruction.parsed {
+                if let Ok(parsed_instr) = from_value::<ParsedValue>(parsed_value.clone()) {
+                    println!("Parsed Instruction: {:#?}", parsed_instr);
+                } else if let Ok(parsed_str) = from_value::<String>(parsed_value.clone()) {
+                    println!("Parsed String: {:#?}", parsed_str);
+                } else {
+                    println!("Unknown Parsed Value: {:#?}", parsed_value);
+                }
+            }
+        }
     }
 }

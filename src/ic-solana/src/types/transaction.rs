@@ -14,6 +14,8 @@ use std::fmt;
 use std::fmt::Display;
 use std::str::FromStr;
 
+use super::UiParsedMessage;
+
 pub type TransactionResult<T> = Result<T, TransactionError>;
 
 #[derive(Debug, PartialEq, Default, Eq, Clone, Serialize, Deserialize)]
@@ -164,7 +166,8 @@ impl Default for TransactionDetails {
 #[serde(rename_all = "camelCase")]
 pub struct UiTransaction {
     pub signatures: Vec<String>,
-    pub message: UiMessage,
+    // pub message: UiMessage,
+    pub message: UiParsedMessage,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, CandidType)]
@@ -180,6 +183,7 @@ pub enum EncodedTransaction {
     LegacyBinary(String), // Old way of expressing base-58, retained for RPC backwards compatibility
     Binary(String, TransactionBinaryEncoding),
     Json(UiTransaction),
+    // JsonParsed(UiTransaction),
     Accounts(UiAccountsList),
 }
 
@@ -213,7 +217,7 @@ pub struct TransactionStatusMeta {
     pub pre_token_balances: Option<Vec<TransactionTokenBalance>>,
     pub post_token_balances: Option<Vec<TransactionTokenBalance>>,
     pub rewards: Option<Rewards>,
-    pub loaded_addresses: LoadedAddresses,
+    // pub loaded_addresses: LoadedAddresses,
     pub return_data: Option<TransactionReturnData>,
     pub compute_units_consumed: Option<u64>,
 }
@@ -248,7 +252,8 @@ pub struct LoadedAddresses {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, CandidType)]
 #[serde(rename_all = "camelCase")]
 pub struct EncodedTransactionWithStatusMeta {
-    pub transaction: EncodedTransaction,
+    // pub transaction: EncodedTransaction,
+    pub transaction: UiTransaction,
     pub meta: Option<TransactionStatusMeta>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub version: Option<TransactionVersion>,

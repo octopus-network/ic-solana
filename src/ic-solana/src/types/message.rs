@@ -8,6 +8,8 @@ use crate::utils::short_vec;
 use candid::CandidType;
 use serde::{Deserialize, Serialize};
 
+use super::ParsedInstruction;
+
 /// Bit mask that indicates whether a serialized message is versioned.
 pub const MESSAGE_VERSION_PREFIX: u8 = 0x80;
 
@@ -136,7 +138,8 @@ pub enum UiMessage {
 pub struct UiParsedMessage {
     pub account_keys: Vec<ParsedAccount>,
     pub recent_blockhash: String,
-    pub instructions: Vec<UiInstruction>,
+    // pub instructions: Vec<UiInstruction>,
+    pub instructions: Vec<ParsedInstruction>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub address_table_lookups: Option<Vec<UiAddressTableLookup>>,
 }

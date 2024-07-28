@@ -7,11 +7,12 @@ use ic_cdk::api::management_canister::http_request::{
 use ic_cdk::{query, update};
 use ic_solana::http_request_required_cycles;
 use ic_solana::rpc_client::RpcResult;
+use ic_solana::types::UiTransactionEncoding;
 use ic_solana::types::{
-    Account, BlockHash, EncodedConfirmedTransactionWithStatusMeta, Instruction, Message, Pubkey,
-    RpcAccountInfoConfig, RpcContextConfig, RpcSendTransactionConfig, RpcSignatureStatusConfig,
-    RpcTransactionConfig, Signature, Transaction, TransactionStatus, UiAccountEncoding,
-    UiTokenAmount,
+    Account, BlockHash, EncodedConfirmedTransactionWithStatusMeta, EncodingConfig, Instruction,
+    Message, Pubkey, RpcAccountInfoConfig, RpcContextConfig, RpcSendTransactionConfig,
+    RpcSignatureStatusConfig, RpcTransactionConfig, Signature, Transaction, TransactionStatus,
+    UiAccountEncoding, UiTokenAmount,
 };
 use serde_bytes::ByteBuf;
 use serde_json::{from_str, json, Value};
@@ -161,8 +162,13 @@ pub async fn sol_get_transaction(signature: String) -> RpcResult<String> {
     let client = rpc_client();
     let signature = Signature::from_str(&signature).expect("Invalid signature");
     let response = client
-        .get_transaction1(&signature, RpcTransactionConfig::default())
+        .get_transaction1(
+            &signature,
+            // RpcTransactionConfig::new_with_encoding(&Some(UiTransactionEncoding::JsonParsed)),
+            RpcTransactionConfig::default(),
+        )
         .await?;
+    ic_cdk::println!("transaction detail: {:#?}", response);
     Ok(response)
 }
 

@@ -155,11 +155,12 @@ pub struct UiCompiledInstruction {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, CandidType)]
 #[serde(rename_all = "camelCase")]
 pub struct ParsedInstruction {
-    pub program: String,
-    pub program_id: String,
     // pub parsed: Value,
     #[serde(with = "serde_bytes")]
     pub parsed: Vec<u8>,
+    pub program: String,
+    pub program_id: String,
+    
     pub stack_height: Option<u32>,
 }
 

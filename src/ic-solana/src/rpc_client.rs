@@ -578,6 +578,7 @@ impl RpcClient {
         let json_response = serde_json::from_str::<
             JsonRpcResponse<EncodedConfirmedTransactionWithStatusMeta>,
         >(&response)?;
+        ic_cdk::println!("json_response: {:#?}", json_response);
 
         if let Some(e) = json_response.error {
             Err(e.into())
