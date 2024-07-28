@@ -2,8 +2,13 @@ mod common;
 
 use crate::common::{init, random_principal};
 use candid::encode_one;
+use ic_solana::types::Cluster;
 use pocket_ic::PocketIc;
 
+#[test]
+fn test_str() {
+    println!("{}", Cluster::Mainnet.to_string());
+}
 #[test]
 fn test_get_balance() {
     std::env::set_var("SCHNORR_CANISTER_PATH", "schnorr_canister.wasm.gz");

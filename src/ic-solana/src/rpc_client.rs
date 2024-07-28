@@ -586,6 +586,33 @@ impl RpcClient {
         }
     }
 
+    pub async fn get_transaction1(
+        &self,
+        signature: &Signature,
+        config: RpcTransactionConfig,
+    ) -> RpcResult<String> {
+        let payload = RpcRequest::GetTransaction
+            .build_request_json(
+                self.next_request_id(),
+                json!([signature.to_string(), config]),
+            )
+            .to_string();
+
+        let response = self
+            .call(&payload, TRANSACTION_RESPONSE_SIZE_ESTIMATE)
+            .await?;
+
+        let json_response = serde_json::from_str::<
+            JsonRpcResponse<EncodedConfirmedTransactionWithStatusMeta>,
+        >(&response)?;
+
+        if let Some(e) = json_response.error {
+            Err(e.into())
+        } else {
+            Ok(serde_json::to_string(&json_response.result.unwrap()).unwrap())
+        }
+    }
+
     ///
     /// Submits a signed transaction to the cluster for processing.
     /// This method does not alter the transaction in any way; it relays the transaction created by clients to the node as-is.
@@ -639,10 +666,7 @@ impl RpcClient {
     /// Method relies on the `getminimumbalanceforrentexemption` RPC call to get the balance:
     ///   https://solana.com/docs/rpc/http/getminimumbalanceforrentexemption
     ///
-    pub async fn get_minimum_balance_for_rent_exemption(
-        &self,
-        data_len: usize,
-    ) -> RpcResult<u64> {
+    pub async fn get_minimum_balance_for_rent_exemption(&self, data_len: usize) -> RpcResult<u64> {
         let payload = RpcRequest::GetMinimumBalanceForRentExemption
             .build_request_json(self.next_request_id(), json!([data_len]))
             .to_string();

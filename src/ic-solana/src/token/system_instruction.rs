@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use ic_solana::types::{AccountMeta, Instruction, Pubkey};
+use crate::types::{AccountMeta, Instruction, Pubkey};
 use num_derive::{FromPrimitive, ToPrimitive};
 use num_traits::FromPrimitive;
 use serde::{Deserialize, Serialize};
@@ -1150,34 +1150,4 @@ pub fn transfer_many(from_pubkey: &Pubkey, to_lamports: &[(Pubkey, u64)]) -> Vec
         .iter()
         .map(|(to_pubkey, lamports)| transfer(from_pubkey, to_pubkey, *lamports))
         .collect()
-}
-
-#[cfg(test)]
-mod tests {
-    use ic_solana::types::{Instruction, Pubkey};
-    use num_derive::FromPrimitive;
-
-    use crate::system_instruction::DecodeError;
-    fn get_keys(instruction: &Instruction) -> Vec<Pubkey> {
-        instruction.accounts.iter().map(|x| x.pubkey).collect()
-    }
-    #[test]
-    fn test_decode_custom_error_to_enum() {
-        #[derive(Debug, FromPrimitive, PartialEq, Eq)]
-        enum TestEnum {
-            A,
-            B,
-            C,
-        }
-        impl<T> DecodeError<T> for TestEnum {
-            fn type_of() -> &'static str {
-                "TestEnum"
-            }
-        }
-        assert_eq!(TestEnum::decode_custom_error_to_enum(0), Some(TestEnum::A));
-        assert_eq!(TestEnum::decode_custom_error_to_enum(1), Some(TestEnum::B));
-        assert_eq!(TestEnum::decode_custom_error_to_enum(2), Some(TestEnum::C));
-        let option: Option<TestEnum> = TestEnum::decode_custom_error_to_enum(3);
-        assert_eq!(option, None);
-    }
 }

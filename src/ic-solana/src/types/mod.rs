@@ -7,6 +7,7 @@ pub mod config;
 pub mod epoch_info;
 pub mod fee_calculator;
 pub mod filter;
+mod hash;
 pub mod instruction;
 pub mod message;
 pub mod pubkey;

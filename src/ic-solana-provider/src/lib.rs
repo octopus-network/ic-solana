@@ -157,13 +157,36 @@ pub async fn sol_get_account_info(pubkey: String) -> RpcResult<Option<Account>> 
 /// Returns transaction details for a confirmed transaction.
 ///
 #[update(name = "sol_getTransaction")]
-pub async fn sol_get_transaction(
-    signature: String,
-) -> RpcResult<EncodedConfirmedTransactionWithStatusMeta> {
+pub async fn sol_get_transaction(signature: String) -> RpcResult<String> {
     let client = rpc_client();
     let signature = Signature::from_str(&signature).expect("Invalid signature");
     let response = client
-        .get_transaction(&signature, RpcTransactionConfig::default())
+        .get_transaction1(&signature, RpcTransactionConfig::default())
+        .await?;
+    Ok(response)
+}
+
+///
+/// Returns the statuses of a list of transaction signatures.
+///
+#[update(name = "sol_getSignatureStatuses")]
+pub async fn sol_get_signature_statuses(
+    signatures: Vec<String>,
+) -> RpcResult<Vec<TransactionStatus>> {
+    let client = rpc_client();
+
+    let signatures = signatures
+        .iter()
+        .map(|s| Signature::from_str(s).unwrap())
+        .collect::<Vec<_>>();
+
+    let response = client
+        .get_signature_statuses(
+            &signatures,
+            RpcSignatureStatusConfig {
+                search_transaction_history: true,
+            },
+        )
         .await?;
     Ok(response)
 }

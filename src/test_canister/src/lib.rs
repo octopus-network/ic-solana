@@ -15,17 +15,18 @@ use serde_bytes::ByteBuf;
 use std::cell::RefCell;
 use std::str::FromStr;
 
-pub mod extension;
-pub mod instruction_error;
-pub mod program_error;
-pub mod program_option;
-pub mod serialization;
-pub mod system_instruction;
-pub mod token_error;
-pub mod token_instruction;
+use candid::{CandidType, Principal};
+use ic_cdk::update;
+use serde_bytes::ByteBuf;
+
+use ic_solana::token::{SolanaClient, TokenCreateInfo};
+use ic_solana::types::{EncodedConfirmedTransactionWithStatusMeta, Pubkey};
+
+mod utils;
 
 thread_local! {
     static SOL_PROVIDER_CANISTER: RefCell<Option<Principal>>  = const { RefCell::new(None) };
+    static SCHNORR_CANISTER: RefCell<Option<Principal>> = const { RefCell::new(None)};
 }
 
 fn sol_canister_id() -> Principal {
@@ -33,252 +34,87 @@ fn sol_canister_id() -> Principal {
         .with_borrow(|canister| canister.expect("Solana provider canister not initialized"))
 }
 
-#[derive(CandidType, Debug)]
-pub struct SendTransactionRequest {
-    pub instructions: Vec<String>,
-    pub recent_blockhash: Option<String>,
+fn schnorr_canister() -> Principal {
+    SCHNORR_CANISTER.with_borrow(|canister| canister.expect("schnorr canister no initialized"))
 }
 
-// test ic-solana-provider request
-#[ic_cdk::update]
-pub async fn request() {
-    let sol_canister = sol_canister_id();
-    // Get the solana address associated with the caller
-    let response: Result<(String,), _> = ic_cdk::call(sol_canister, "get_address", ()).await;
-    let solana_address = Pubkey::from_str(&response.unwrap().0).unwrap();
-    ic_cdk::println!("solana_address: {}", solana_address);
-
-    let response: Result<(RpcResult<String>,), _> = ic_cdk::call(
-        sol_canister,
-        "request",
-        (
-            RpcRequest::GetMinimumBalanceForRentExemption.to_string(),
-            "[82]",
-            156u64,
-        ),
-    )
-    .await;
-    let rent_exemption = response.unwrap().0.unwrap();
-    ic_cdk::println!("rent_exemption: {:?}", rent_exemption);
-}
-
-// test transfer
-#[ic_cdk::update]
-pub async fn transfer() {
-    let sol_canister = sol_canister_id();
-
-    // Get the solana address associated with the caller
-    let response: Result<(String,), _> = ic_cdk::call(sol_canister, "get_address", ()).await;
-    let solana_address = Pubkey::from_str(&response.unwrap().0).unwrap();
-    ic_cdk::println!("solana_address: {}", solana_address);
-
-    // Get the balance
-    let response: Result<(RpcResult<u64>,), _> = ic_cdk::call(
-        sol_canister,
-        "sol_getBalance",
-        (solana_address.to_string(),),
-    )
-    .await;
-    let lamports = response.unwrap().0.unwrap();
-    ic_cdk::println!("Balance: {} lamports", lamports);
-
-    let fee = 10_000;
-    let amount = 1_000_000u64;
-
-    if lamports <= amount + fee {
-        ic_cdk::trap("Not enough lamports");
-    }
-
-    // Get the latest blockhash
-    let response: Result<(RpcResult<String>,), _> =
-        ic_cdk::call(sol_canister, "sol_latestBlockhash", ()).await;
-    let blockhash = BlockHash::from_str(&response.unwrap().0.unwrap()).unwrap();
-    ic_cdk::println!("Latest Blockhash: {:?}", blockhash);
-
-    // Generate a transfer instruction
-    let system_program_id = Pubkey::from_str("11111111111111111111111111111111").unwrap();
-    let transfer_ix1 = Instruction::new_with_bincode(
-        system_program_id,
-        &(2, 0, 0, 0, 40, 54, 89, 0, 0, 0, 0, 0), // transfer 9_000_000 lamports
-        vec![
-            AccountMeta::new(solana_address, true),
-            AccountMeta::new(
-                Pubkey::from_str("3gghk7mHWtFsJcg6EZGK7sbHj3qW6ExUdZLs9q8GRjia").unwrap(),
-                false,
-            ),
-            AccountMeta::new(system_program_id, false),
-        ],
-    );
-    let to_pubkey = Pubkey::from_str("3gghk7mHWtFsJcg6EZGK7sbHj3qW6ExUdZLs9q8GRjia").unwrap();
-    let transfer_ix2 = system_instruction::transfer(&solana_address, &to_pubkey, 9_000_000);
-
-    let response: Result<(RpcResult<String>,), _> = ic_cdk::call(
-        sol_canister,
-        "sol_sendTransaction",
-        (SendTransactionRequest {
-            instructions: vec![transfer_ix1.to_string(), transfer_ix2.to_string()],
-            recent_blockhash: Some(blockhash.to_string()),
-        },),
-    )
-    .await;
-
-    let signature = response.unwrap().0.unwrap();
-    ic_cdk::println!("Signature: {:?}", signature);
-}
-
-// test create mint account and init it
-#[ic_cdk::update]
-async fn create_mint_account() {
-    let sol_canister = sol_canister_id();
-    // Get the solana address associated with the caller
-    let response: Result<(String,), _> = ic_cdk::call(sol_canister, "get_address", ()).await;
-    let solana_address = Pubkey::from_str(&response.unwrap().0).unwrap();
-    ic_cdk::println!("solana_address: {}", solana_address);
-    // let extension_types: Vec<ExtensionType> = vec![];
-    // let params = "[{\"minContextSlot\":null}]".to_string();
-    let space: usize = 82;
-
-    // get rent exemption
-    let response: Result<(RpcResult<u64>,), _> = ic_cdk::call(
-        sol_canister,
-        "sol_getminimumbalanceforrentexemption",
-        (space,),
-    )
-    .await;
-    let rent_exemption = response.unwrap().0.unwrap();
-    ic_cdk::println!("rent_exemption: {:?}", rent_exemption);
-
-    // let system_program_id = Pubkey::from_str("11111111111111111111111111111111").unwrap();
-    let token22_program_id =
-        Pubkey::from_str("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb").unwrap();
-    let from_pubkey = solana_address;
-
-    // gen token pubkey,or mint account pubkey
-    let key_name = "test_key_1".to_string();
-    let cur_canister_id = ic_cdk::id();
-    let token_pubkey_derived_path = vec![ByteBuf::from(cur_canister_id.as_slice())];
-    let token_pubkey = Pubkey::try_from(
-        eddsa_public_key(key_name.clone(), token_pubkey_derived_path.clone()).await,
-    )
-    .unwrap();
-    ic_cdk::println!("token_pubkey: {:?}", token_pubkey);
-
-    // build create account instruction
-    let create_account_ix = system_instruction::create_account(
-        &from_pubkey,
-        &token_pubkey,
-        rent_exemption,
-        space as u64,
-        &token22_program_id,
-    );
-    ic_cdk::println!("create_account_ix: {:?}", create_account_ix);
-
-    // build init account instruction
-    let decimals = 9;
-    let initialize_mint_ix = token_instruction::initialize_mint(
-        &token22_program_id,
-        &token_pubkey,
-        &from_pubkey,
-        Some(&from_pubkey),
-        decimals,
-    )
-    .unwrap();
-    ic_cdk::println!("initialize_mint_ix: {:?}", initialize_mint_ix);
-
-    // Get the latest blockhash
-    let response: Result<(RpcResult<String>,), _> =
-        ic_cdk::call(sol_canister, "sol_latestBlockhash", ()).await;
-    let blockhash = BlockHash::from_str(&response.unwrap().0.unwrap()).unwrap();
-    ic_cdk::println!("Latest Blockhash: {:?}", blockhash);
-
-    let instructions = vec![create_account_ix, initialize_mint_ix];
-    let message = Message::new_with_blockhash(&instructions, Some(&from_pubkey), &blockhash);
-    let mut tx = Transaction::new_unsigned(message);
-
-    //add signature
-    let sol_pubkey_derived_path = vec![ByteBuf::from(sol_canister.as_slice())];
-    let signature_0: Signature =
-        sign_with_eddsa(key_name.clone(), sol_pubkey_derived_path, tx.message_data())
-            .await
-            .try_into()
-            .expect("Invalid signature");
-    tx.add_signature(0, signature_0);
-    // tx.add_signature(1, signature_0);
-    let signature_1: Signature =
-        sign_with_eddsa(key_name, token_pubkey_derived_path, tx.message_data())
-            .await
-            .try_into()
-            .expect("Invalid signature");
-    tx.add_signature(1, signature_1);
-
-    ic_cdk::println!("tx with signaure: {:?}", tx);
-
-    // submit to solana
-    let response: Result<(RpcResult<String>,), _> =
-        ic_cdk::call(sol_canister, "sol_sendRawTransaction", (tx.to_string(),)).await;
-
-    let signature = response.unwrap().0.unwrap();
-    ic_cdk::println!("Signature: {:?}", signature);
-}
-
-// test mint token to dest address
-#[ic_cdk::update]
-async fn mint_to() {}
-
-/// When setting up the test canister, we need to save a reference to the solana provider canister
-/// so that we can call it later.
 #[ic_cdk::init]
-async fn init(sol_canister: String) {
+async fn init(sol_canister: String, schnorr_canister: String) {
     SOL_PROVIDER_CANISTER.with(|canister| {
         *canister.borrow_mut() =
             Some(Principal::from_text(sol_canister).expect("Invalid principal"));
     });
+
+    SCHNORR_CANISTER.with(|canister| {
+        *canister.borrow_mut() =
+            Some(Principal::from_text(schnorr_canister).expect("Invalid principal"));
+    });
 }
 
-/// Fetches the ed25519 public key from the schnorr canister.
-pub async fn eddsa_public_key(key_name: String, derivation_path: Vec<ByteBuf>) -> Vec<u8> {
-    let schnorr_canister = Principal::from_text("bkyz2-fmaaa-aaaaa-qaaaq-cai").unwrap();
-
-    let res: Result<(SchnorrPublicKeyResponse,), _> = ic_cdk::call(
-        schnorr_canister,
-        "schnorr_public_key",
-        (SchnorrPublicKeyArgs {
-            canister_id: None,
-            derivation_path: DerivationPath::new(derivation_path),
-            key_id: SchnorrKeyId {
-                algorithm: SchnorrAlgorithm::Ed25519,
-                name: key_name,
-            },
-        },),
-    )
-    .await;
-
-    res.unwrap().0.public_key
+#[update]
+async fn query_transaction(
+    payer: String,
+    tx_hash: String,
+) -> EncodedConfirmedTransactionWithStatusMeta {
+    let s = SolanaClient {
+        sol_canister_id: sol_canister_id(),
+        payer: Pubkey::from_str(payer.as_str()).unwrap(),
+        payer_derive_path: vec![ByteBuf::from("custom_payer")],
+        chainkey_name: "test_key_1".to_string(),
+        schnorr_canister: schnorr_canister(),
+    };
+    let r = s.query_transaction(tx_hash).await.unwrap();
+    r
 }
 
-/// Signs a message with an ed25519 key.
-pub async fn sign_with_eddsa(
-    key_name: String,
-    derivation_path: Vec<ByteBuf>,
-    message: Vec<u8>,
-) -> Vec<u8> {
-    let schnorr_canister = Principal::from_text("bkyz2-fmaaa-aaaaa-qaaaq-cai").unwrap();
-
-    let res: Result<(SignWithSchnorrReply,), _> = ic_cdk::call(
-        schnorr_canister,
-        "sign_with_schnorr",
-        (SignWithSchnorrArgs {
-            message,
-            derivation_path: DerivationPath::new(derivation_path),
-            key_id: SchnorrKeyId {
-                name: key_name,
-                algorithm: SchnorrAlgorithm::Ed25519,
-            },
-        },),
+#[update]
+async fn get_payer() -> String {
+    let payer_path = vec![ByteBuf::from("custom_payer")];
+    let c = SolanaClient::derive_account(
+        schnorr_canister(),
+        "test_key_1".to_string(),
+        "custom_payer".to_string(),
     )
     .await;
+    c.to_string()
+}
 
-    res.unwrap().0.signature
+#[update]
+async fn create_token_with_metadata(payer_addr: String) -> String {
+    let s = SolanaClient {
+        sol_canister_id: sol_canister_id(),
+        payer: Pubkey::from_str(payer_addr.as_str()).unwrap(),
+        payer_derive_path: vec![ByteBuf::from("custom_payer")],
+        chainkey_name: "test_key_1".to_string(),
+        schnorr_canister: schnorr_canister(),
+    };
+    let token_info = TokenCreateInfo {
+        name: "YHTCC".to_string(),
+        symbol: "YHTCC".to_string(),
+        decimals: 2,
+        uri: "".to_string(),
+    };
+    let r = s.create_mint_with_metadata(token_info).await.unwrap();
+    r.to_string()
+}
+
+#[update]
+async fn create_token(payer_addr: String) -> String {
+    let s = SolanaClient {
+        sol_canister_id: sol_canister_id(),
+        payer: Pubkey::from_str(payer_addr.as_str()).unwrap(),
+        payer_derive_path: vec![ByteBuf::from("custom_payer")],
+        chainkey_name: "test_key_1".to_string(),
+        schnorr_canister: schnorr_canister(),
+    };
+    let token_info = TokenCreateInfo {
+        name: "YHTX".to_string(),
+        symbol: "YHTX".to_string(),
+        decimals: 2,
+        uri: "".to_string(),
+    };
+    let r = s.create_mint(token_info).await.unwrap();
+    r.to_string()
 }
 
 ic_cdk::export_candid!();
