@@ -1,26 +1,22 @@
 use candid::{CandidType, Principal};
 
-use ic_management_canister_types::{
-    DerivationPath, SchnorrAlgorithm, SchnorrKeyId, SchnorrPublicKeyArgs, SchnorrPublicKeyResponse,
-    SignWithSchnorrArgs, SignWithSchnorrReply,
-};
-use ic_solana::request::RpcRequest;
-use ic_solana::rpc_client::RpcResult;
-use ic_solana::types::{
-    AccountMeta, BlockHash, Instruction, Message, Pubkey, Signature, Transaction,
-};
-
 use serde_bytes::ByteBuf;
 
 use std::cell::RefCell;
 use std::str::FromStr;
 
-use candid::{CandidType, Principal};
 use ic_cdk::update;
-use serde_bytes::ByteBuf;
 
 use ic_solana::token::{SolanaClient, TokenCreateInfo};
 use ic_solana::types::{EncodedConfirmedTransactionWithStatusMeta, Pubkey};
+pub mod extension;
+pub mod instruction_error;
+pub mod program_error;
+pub mod program_option;
+pub mod serialization;
+pub mod system_instruction;
+pub mod token_error;
+pub mod token_instruction;
 
 mod utils;
 
@@ -126,7 +122,7 @@ mod test {
     use spl_token_2022::instruction::TokenInstruction;
     use spl_token_2022::solana_program::{program_option::COption, pubkey::Pubkey};
 
-    use crate::system_instruction::SystemInstruction;
+    use super::system_instruction::SystemInstruction;
     // use spl_token_2022::pod_instruction::PodTokenInstruction;
 
     #[test]

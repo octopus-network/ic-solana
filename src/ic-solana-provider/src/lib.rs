@@ -192,30 +192,6 @@ pub async fn sol_get_signature_statuses(
 }
 
 ///
-/// Returns the statuses of a list of transaction signatures.
-///
-#[update(name = "sol_getSignatureStatuses")]
-pub async fn sol_get_signature_statuses(
-    signatures: Vec<String>,
-) -> RpcResult<Vec<TransactionStatus>> {
-    let client = rpc_client();
-
-    let signatures = signatures
-        .iter()
-        .map(|s| Signature::from_str(s).unwrap())
-        .collect::<Vec<_>>();
-
-    client
-        .get_signature_statuses(
-            &signatures,
-            RpcSignatureStatusConfig {
-                search_transaction_history: true,
-            },
-        )
-        .await
-}
-
-///
 /// Send a transaction to the network.
 ///
 #[update(name = "sol_sendTransaction")]
