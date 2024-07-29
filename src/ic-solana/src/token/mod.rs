@@ -11,6 +11,7 @@ use anyhow::anyhow;
 use candid::Principal;
 use serde_bytes::ByteBuf;
 use std::str::FromStr;
+use crate::token::system_instruction::SYSVAR_ID;
 
 pub mod associated_account;
 pub mod constants;
@@ -80,8 +81,8 @@ impl SolanaClient {
             &token22_program_id(),
             &token_mint,
             &associated_token_account,
-            &self.payer,
-            &[],
+            &Pubkey::from_str(SYSVAR_ID).unwrap(),
+            &[&self.payer],
             amount,
         )
         .unwrap()];
@@ -147,7 +148,7 @@ impl SolanaClient {
     ) -> anyhow::Result<Pubkey> {
         let associated_account =
             get_associated_token_address_with_program_id(owner, token_mint, &token22_program_id());
-        let r: Result<(RpcResult<Option<Account>>,), _> = ic_cdk::call(
+        let r: Result<(RpcResult<Option<String>>,), _> = ic_cdk::call(
             self.sol_canister_id,
             "sol_getAccountInfo",
             (associated_account.to_string(),),
@@ -292,7 +293,7 @@ impl SolanaClient {
         )
         .await
         .try_into()
-        .map_err(|e| anyhow!("invalid signature"))?;
+        .map_err(|_e| anyhow!("invalid signature"))?;
         Ok(signature)
     }
 

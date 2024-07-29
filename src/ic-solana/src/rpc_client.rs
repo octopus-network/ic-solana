@@ -309,6 +309,40 @@ impl RpcClient {
         Ok(account.decode())
     }
 
+    pub async fn get_account_info1(
+        &self,
+        pubkey: &Pubkey,
+        config: RpcAccountInfoConfig,
+        max_response_bytes: Option<u64>,
+    ) -> RpcResult<Option<String>> {
+        let payload = RpcRequest::GetAccountInfo
+            .build_request_json(self.next_request_id(), json!([pubkey.to_string(), config]))
+            .to_string();
+
+        let response = self
+            .call(
+                &payload,
+                max_response_bytes.unwrap_or(MAX_PDA_ACCOUNT_DATA_LENGTH),
+            )
+            .await?;
+
+        let json_response =
+            serde_json::from_str::<JsonRpcResponse<Response<Option<UiAccount>>>>(&response)?;
+
+        if let Some(e) = json_response.error {
+            return Err(e.into());
+        }
+
+        let not_found_error = || RpcError::Text(format!("AccountNotFound: pubkey={}", pubkey));
+        if json_response.result.is_none() {
+            return Ok(None)
+        }
+
+        let rpc_account = json_response.result.unwrap();
+        Ok(rpc_account.value.map(|a|serde_json::to_string(&a.decode()).unwrap()))
+
+    }
+
     ///
     /// Returns the current Solana version running on the node.
     ///
