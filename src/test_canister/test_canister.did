@@ -166,6 +166,7 @@ service : (text, text) -> {
   create_token : (text) -> (text);
   create_token_with_metadata : (text) -> (text);
   get_payer : () -> (text);
+  mint_to : (text, text, nat64, text) -> (text);
   query_transaction : (text, text) -> (
       EncodedConfirmedTransactionWithStatusMeta,
     );

@@ -27,6 +27,3 @@ dist/
 /tmp
 pocket-ic
 
-*/*.wasm
-*/*.wasm.gz
-src/ic-solana-provider/ic-solana-provider.wasm.gz

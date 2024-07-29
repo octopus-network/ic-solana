@@ -32,7 +32,7 @@ CANISTER_ID=$(dfx canister id ic-solana-provider)
 echo "Solana canister id: $CANISTER_ID"
 
 # Deploy the test canister
-dfx deploy test_canister --argument "( \"${CANISTER_ID}\" )" --mode=reinstall -y
+dfx deploy test_canister --argument "( \"${CANISTER_ID}\", \"${SCHNORR_CANISTER_ID}\")" --mode=reinstall -y
 
 echo "Test canister id: $CANISTER_ID"
 

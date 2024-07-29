@@ -1,5 +1,5 @@
 use crate::eddsa::{eddsa_public_key, sign_with_eddsa};
-use crate::rpc_client::RpcResult;
+use crate::rpc_client::{RpcError, RpcResult};
 use crate::token::associated_account::get_associated_token_address_with_program_id;
 use crate::token::constants::token22_program_id;
 use crate::token::token_metadata::{OptionalNonZeroPubkey, TokenMetadata};
@@ -59,6 +59,22 @@ impl SolanaClient {
         Ok(tx)
     }
 
+    // parse the redeem transaction via signatrure,return (transition fee info (sender,receiver and amount) ,burned info (account and amount),receiver include memo)
+    //
+    pub async fn parse_redeem_transaction(
+        &self,
+        signature: String,
+    ) -> anyhow::Result<EncodedConfirmedTransactionWithStatusMeta> {
+        let response: Result<(RpcResult<String>,), _> =
+            ic_cdk::call(self.sol_canister_id, "sol_getTransaction", (signature,)).await;
+        let tx = response
+            .map_err(|e| anyhow!(format!("call sol_getTransaction err: {:?}", e)))?
+            .0
+            .map_err(|e| anyhow!(format!("sol_getTransaction rpc error: {:?}", e)))?;
+        let tx = serde_json::from_str(tx.as_str()).unwrap();
+        Ok(tx)
+    }
+
     pub async fn get_latest_blockhash(&self) -> anyhow::Result<BlockHash> {
         let response: Result<(RpcResult<String>,), _> =
             ic_cdk::call(self.sol_canister_id, "sol_latestBlockhash", ()).await;
@@ -71,11 +87,17 @@ impl SolanaClient {
 
     pub async fn mint_to(
         &self,
-        to_account: Pubkey,
+        associated_token_account: Pubkey,
         amount: u64,
         token_mint: Pubkey,
     ) -> anyhow::Result<String> {
-        let associated_token_account = self.associated_account(&to_account, &token_mint).await?;
+        // let associated_token_account = self.associated_account(&to_account, &token_mint).await?;
+        // ic_cdk::println!(
+        //     "{:?} for {:?} associated token account: {:?} ",
+        //     to_account.to_string(),
+        //     token_mint.to_string(),
+        //     associated_token_account.to_string()
+        // );
         let instructions = vec![token_instruction::mint_to(
             &token22_program_id(),
             &token_mint,
@@ -147,6 +169,14 @@ impl SolanaClient {
     ) -> anyhow::Result<Pubkey> {
         let associated_account =
             get_associated_token_address_with_program_id(owner, token_mint, &token22_program_id());
+
+        ic_cdk::println!(
+            "{:?} for {:?} associated token account: {:?} ",
+            owner.to_string(),
+            token_mint.to_string(),
+            associated_account.to_string()
+        );
+
         let r: Result<(RpcResult<Option<Account>>,), _> = ic_cdk::call(
             self.sol_canister_id,
             "sol_getAccountInfo",
@@ -154,9 +184,14 @@ impl SolanaClient {
         )
         .await;
         let resp = r
-            .map_err(|e| anyhow!(format!("query account info error: {:?}", e)))?
+            .map_err(|e| anyhow!(format!("call sol_getAccountInfo error: {:?}", e)))?
             .0
-            .map_err(|e| anyhow!(format!("query account info rpc error:{:?}", e)))?;
+            .map_err(|e| {
+                // match e {
+                //     RpcError::Text()
+                // }
+                anyhow!(format!("query account info rpc error:{:?}", e))
+            })?;
         match resp {
             None => {
                 //create_account
@@ -164,15 +199,16 @@ impl SolanaClient {
                     .await?;
                 Ok(associated_account)
             }
+            //TODO: check already contain the associated_account ?
             Some(_) => Ok(associated_account),
         }
     }
 
-    async fn create_associated_token_account(
+    pub async fn create_associated_token_account(
         &self,
         owner_addr: &Pubkey,
         token_mint: &Pubkey,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<String> {
         let instructions = vec![
             crate::token::associated_account::create_associated_token_account(
                 &self.payer,
@@ -181,13 +217,13 @@ impl SolanaClient {
                 &token22_program_id(),
             ),
         ];
-        let _tx_hash = self
+        let tx_hash = self
             .send_raw_transaction(
                 instructions.as_slice(),
                 vec![self.payer_derive_path.clone()],
             )
             .await?;
-        Ok(())
+        Ok(tx_hash)
     }
 
     pub async fn create_mint_with_metadata(
@@ -292,7 +328,7 @@ impl SolanaClient {
         )
         .await
         .try_into()
-        .map_err(|e| anyhow!("invalid signature"))?;
+        .map_err(|e| anyhow!("invalid signature: {:?}", e))?;
         Ok(signature)
     }
 

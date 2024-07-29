@@ -8,10 +8,9 @@ use ic_cdk::{query, update};
 use ic_solana::http_request_required_cycles;
 use ic_solana::rpc_client::RpcResult;
 use ic_solana::types::{
-    Account, BlockHash, EncodedConfirmedTransactionWithStatusMeta, Instruction, Message, Pubkey,
-    RpcAccountInfoConfig, RpcContextConfig, RpcSendTransactionConfig, RpcSignatureStatusConfig,
-    RpcTransactionConfig, Signature, Transaction, TransactionStatus, UiAccountEncoding,
-    UiTokenAmount,
+    Account, BlockHash, Instruction, Message, Pubkey, RpcAccountInfoConfig, RpcContextConfig,
+    RpcSendTransactionConfig, RpcSignatureStatusConfig, RpcTransactionConfig, Signature,
+    Transaction, TransactionStatus, UiAccountEncoding, UiTokenAmount,
 };
 use serde_bytes::ByteBuf;
 use serde_json::{from_str, json, Value};
