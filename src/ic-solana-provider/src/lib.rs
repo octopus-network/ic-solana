@@ -135,10 +135,10 @@ pub async fn sol_get_latest_blockhash() -> RpcResult<String> {
 /// Returns all information associated with the account of provided Pubkey.
 ///
 #[update(name = "sol_getAccountInfo")]
-pub async fn sol_get_account_info(pubkey: String) -> RpcResult<Option<Account>> {
+pub async fn sol_get_account_info(pubkey: String) -> RpcResult<Option<String>> {
     let client = rpc_client();
     let account_info = client
-        .get_account_info(
+        .get_account_info1(
             &Pubkey::from_str(&pubkey).expect("Invalid public key"),
             RpcAccountInfoConfig {
                 // Encoded binary (base58) data should be less than 128 bytes, so use base64 encoding.

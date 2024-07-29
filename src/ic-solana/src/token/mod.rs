@@ -12,6 +12,7 @@ use candid::Principal;
 use serde_bytes::ByteBuf;
 use std::str::FromStr;
 use crate::token::system_instruction::SYSVAR_ID;
+use crate::token::token_instruction::mint_to;
 
 pub mod associated_account;
 pub mod constants;
@@ -81,8 +82,8 @@ impl SolanaClient {
             &token22_program_id(),
             &token_mint,
             &associated_token_account,
-            &Pubkey::from_str(SYSVAR_ID).unwrap(),
-            &[&self.payer],
+            &self.payer,
+            &[],
             amount,
         )
         .unwrap()];
