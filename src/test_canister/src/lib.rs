@@ -67,7 +67,6 @@ async fn query_transaction(
 
 #[update]
 async fn get_payer() -> String {
-    // let payer_path = vec![ByteBuf::from("custom_payer")];
     let c = SolanaClient::derive_account(
         schnorr_canister(),
         "test_key_1".to_string(),
@@ -78,10 +77,16 @@ async fn get_payer() -> String {
 }
 
 #[update]
-async fn create_token(payer_addr: String) -> String {
+async fn create_token() -> String {
+    let c = SolanaClient::derive_account(
+        schnorr_canister(),
+        "test_key_1".to_string(),
+        "custom_payer".to_string(),
+    )
+    .await;
     let s = SolanaClient {
         sol_canister_id: sol_canister_id(),
-        payer: Pubkey::from_str(payer_addr.as_str()).unwrap(),
+        payer: c,
         payer_derive_path: vec![ByteBuf::from("custom_payer")],
         chainkey_name: "test_key_1".to_string(),
         schnorr_canister: schnorr_canister(),
@@ -97,10 +102,17 @@ async fn create_token(payer_addr: String) -> String {
 }
 
 #[update]
-async fn create_token_with_metadata(payer_addr: String) -> String {
+async fn create_token_with_metadata() -> String {
+    let c = SolanaClient::derive_account(
+        schnorr_canister(),
+        "test_key_1".to_string(),
+        "custom_payer".to_string(),
+    )
+    .await;
+
     let s = SolanaClient {
         sol_canister_id: sol_canister_id(),
-        payer: Pubkey::from_str(payer_addr.as_str()).unwrap(),
+        payer: c,
         payer_derive_path: vec![ByteBuf::from("custom_payer")],
         chainkey_name: "test_key_1".to_string(),
         schnorr_canister: schnorr_canister(),
@@ -139,19 +151,44 @@ async fn create_associated_token_account(
 }
 
 #[update]
-async fn mint_to(
-    payer_addr: String,
-    to_account: String,
-    amount: u64,
-    token_mint: String,
-) -> String {
+async fn create_ata(to_address: String, token_mint: String) -> String {
+    let c = SolanaClient::derive_account(
+        schnorr_canister(),
+        "test_key_1".to_string(),
+        "custom_payer".to_string(),
+    )
+    .await;
+
     let s = SolanaClient {
         sol_canister_id: sol_canister_id(),
-        payer: Pubkey::from_str(payer_addr.as_str()).unwrap(),
+        payer: c,
         payer_derive_path: vec![ByteBuf::from("custom_payer")],
         chainkey_name: "test_key_1".to_string(),
         schnorr_canister: schnorr_canister(),
     };
+    let to_addr = Pubkey::from_str(&to_address).unwrap();
+    let token_mint = Pubkey::from_str(&token_mint).unwrap();
+    let r = s.associated_account(&to_addr, &token_mint).await.unwrap();
+    r.to_string()
+}
+
+#[update]
+async fn mint_to(to_account: String, amount: u64, token_mint: String) -> String {
+    let c = SolanaClient::derive_account(
+        schnorr_canister(),
+        "test_key_1".to_string(),
+        "custom_payer".to_string(),
+    )
+    .await;
+
+    let s = SolanaClient {
+        sol_canister_id: sol_canister_id(),
+        payer: c,
+        payer_derive_path: vec![ByteBuf::from("custom_payer")],
+        chainkey_name: "test_key_1".to_string(),
+        schnorr_canister: schnorr_canister(),
+    };
+
     let to_account = Pubkey::from_str(to_account.as_str()).unwrap();
     let token_mint = Pubkey::from_str(token_mint.as_str()).unwrap();
     let associated_account = get_associated_token_address_with_program_id(
@@ -176,6 +213,31 @@ async fn mint_to(
         .unwrap();
     r.to_string()
 }
+
+// #[update]
+// async fn mint_to(to_addr: String, token_mint: String) -> String {
+//     let c = SolanaClient::derive_account(
+//         schnorr_canister(),
+//         "test_key_1".to_string(),
+//         "custom_payer".to_string(),
+//     )
+//     .await;
+
+//     let s = SolanaClient {
+//         sol_canister_id: sol_canister_id(),
+//         payer: c,
+//         payer_derive_path: vec![ByteBuf::from("custom_payer")],
+//         chainkey_name: "test_key_1".to_string(),
+//         schnorr_canister: schnorr_canister(),
+//     };
+//     s.mint_to(
+//         Pubkey::from_str(&to_addr).unwrap(),
+//         100000,
+//         Pubkey::from_str(&token_mint).unwrap(),
+//     )
+//     .await
+//     .unwrap()
+// }
 
 ic_cdk::export_candid!();
 
