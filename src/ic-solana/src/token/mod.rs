@@ -1,18 +1,18 @@
 use crate::eddsa::{eddsa_public_key, sign_with_eddsa};
-use crate::rpc_client::{RpcError, RpcResult};
+
+use crate::rpc_client::RpcResult;
 use crate::token::associated_account::get_associated_token_address_with_program_id;
 use crate::token::constants::token22_program_id;
+
 use crate::token::token_metadata::{OptionalNonZeroPubkey, TokenMetadata};
 use crate::types::{
-    Account, AccountMeta, BlockHash, EncodedConfirmedTransactionWithStatusMeta, Instruction,
-    Message, Pubkey, Signature, Transaction,
+    Account, AccountMeta, BlockHash, Instruction, Message, Pubkey, Signature, Transaction,
 };
 use anyhow::anyhow;
-use candid::Principal;
+use candid::{CandidType, Principal};
+use serde::{Deserialize, Serialize};
 use serde_bytes::ByteBuf;
 use std::str::FromStr;
-use crate::token::system_instruction::SYSVAR_ID;
-use crate::token::token_instruction::mint_to;
 
 pub mod associated_account;
 pub mod constants;
@@ -22,6 +22,7 @@ pub mod system_instruction;
 pub mod token_instruction;
 pub mod token_metadata;
 
+#[derive(CandidType, Deserialize, Serialize, Clone, Debug, PartialEq, Eq)]
 pub struct TokenCreateInfo {
     pub name: String,
     pub symbol: String,
@@ -47,33 +48,14 @@ impl SolanaClient {
         Pubkey::try_from(eddsa_public_key(schnorr_canister, chainkey_name, path).await).unwrap()
     }
 
-    pub async fn query_transaction(
-        &self,
-        txhash: String,
-    ) -> anyhow::Result<EncodedConfirmedTransactionWithStatusMeta> {
+    pub async fn query_transaction(&self, txhash: String) -> anyhow::Result<String> {
         let response: Result<(RpcResult<String>,), _> =
             ic_cdk::call(self.sol_canister_id, "sol_getTransaction", (txhash,)).await;
         let tx = response
             .map_err(|e| anyhow!(format!("query transaction err: {:?}", e)))?
             .0
             .map_err(|e| anyhow!(format!("query transaction rpc error: {:?}", e)))?;
-        let tx = serde_json::from_str(tx.as_str()).unwrap();
-        Ok(tx)
-    }
-
-    // parse the redeem transaction via signatrure,return (transition fee info (sender,receiver and amount) ,burned info (account and amount),receiver include memo)
-    //
-    pub async fn parse_redeem_transaction(
-        &self,
-        signature: String,
-    ) -> anyhow::Result<EncodedConfirmedTransactionWithStatusMeta> {
-        let response: Result<(RpcResult<String>,), _> =
-            ic_cdk::call(self.sol_canister_id, "sol_getTransaction", (signature,)).await;
-        let tx = response
-            .map_err(|e| anyhow!(format!("call sol_getTransaction err: {:?}", e)))?
-            .0
-            .map_err(|e| anyhow!(format!("sol_getTransaction rpc error: {:?}", e)))?;
-        let tx = serde_json::from_str(tx.as_str()).unwrap();
+        // let tx = serde_json::from_str(tx.as_str()).unwrap();
         Ok(tx)
     }
 
@@ -89,26 +71,21 @@ impl SolanaClient {
 
     pub async fn mint_to(
         &self,
-        associated_token_account: Pubkey,
+        associated_account: Pubkey,
         amount: u64,
         token_mint: Pubkey,
     ) -> anyhow::Result<String> {
-        // let associated_token_account = self.associated_account(&to_account, &token_mint).await?;
-        // ic_cdk::println!(
-        //     "{:?} for {:?} associated token account: {:?} ",
-        //     to_account.to_string(),
-        //     token_mint.to_string(),
-        //     associated_token_account.to_string()
-        // );
         let instructions = vec![token_instruction::mint_to(
             &token22_program_id(),
             &token_mint,
-            &associated_token_account,
+            &associated_account,
             &self.payer,
             &[],
             amount,
         )
         .unwrap()];
+        ic_cdk::println!("[solana_client::mint_to] instructions: {:?} ", instructions);
+
         let tx_hash = self
             .send_raw_transaction(
                 instructions.as_slice(),
@@ -169,40 +146,74 @@ impl SolanaClient {
         owner: &Pubkey,
         token_mint: &Pubkey,
     ) -> anyhow::Result<Pubkey> {
+        ic_cdk::println!(
+            "[solana_client::associated_account] owner: {:?}, token_mint: {:?} ",
+            owner.to_string(),
+            token_mint.to_string()
+        );
         let associated_account =
             get_associated_token_address_with_program_id(owner, token_mint, &token22_program_id());
 
         ic_cdk::println!(
-            "{:?} for {:?} associated token account: {:?} ",
-            owner.to_string(),
-            token_mint.to_string(),
-            associated_account.to_string()
-        );
+                "[solana_client::associated_account] get_associated_token_address_with_program_id: {:?}",
+                associated_account.to_string()
+            );
 
-        let r: Result<(RpcResult<Option<Account>>,), _> = ic_cdk::call(
+        let r: Result<(RpcResult<Option<String>>,), _> = ic_cdk::call(
             self.sol_canister_id,
             "sol_getAccountInfo",
             (associated_account.to_string(),),
         )
         .await;
         let resp = r
-            .map_err(|e| anyhow!(format!("call sol_getAccountInfo error: {:?}", e)))?
+            .map_err(|e| {
+                anyhow!(format!(
+                    "[solana_client::associated_account] call sol_getAccountInfo error: {:?}",
+                    e
+                ))
+            })?
             .0
             .map_err(|e| {
                 // match e {
                 //     RpcError::Text()
                 // }
-                anyhow!(format!("query account info rpc error:{:?}", e))
+                anyhow!(format!(
+                    "[solana_client::associated_account] sol_getAccountInfo rpc error:{:?}",
+                    e
+                ))
             })?;
+        ic_cdk::println!(
+            "[solana_client::associated_account] sol_getAccountInfo resp: {:#?} ",
+            resp
+        );
+
         match resp {
             None => {
                 //create_account
-                self.create_associated_token_account(owner, token_mint)
+                let signature = self
+                    .create_associated_token_account(owner, token_mint)
                     .await?;
+
+                ic_cdk::println!(
+                    "[solana_client::associated_account] create_associated_token_account based on {} and {} is {:?} .\nThe signature: {:?} ",
+                    owner.to_string(),
+                    token_mint.to_string(),
+                    associated_account.to_string(),
+                    signature,
+                );
+
                 Ok(associated_account)
             }
-            //TODO: check already contain the associated_account ?
-            Some(_) => Ok(associated_account),
+            Some(account) => {
+                ic_cdk::println!("[solana_client::associated_account] The associate account is already exists: {:?} ", account);
+                let account = serde_json::from_str::<Option<Account>>(&account)?;
+                //TODO: how to confirm the associated_account ?
+                ic_cdk::println!(
+                    "[solana_client::associated_account] The associate account owner is :{:?} ",
+                    account.unwrap().owner.to_string()
+                );
+                Ok(associated_account)
+            }
         }
     }
 
@@ -219,6 +230,11 @@ impl SolanaClient {
                 &token22_program_id(),
             ),
         ];
+        ic_cdk::println!(
+            "[solana_client::create_associated_token_account] instructions :{:#?} ",
+            instructions
+        );
+
         let tx_hash = self
             .send_raw_transaction(
                 instructions.as_slice(),
@@ -350,6 +366,12 @@ impl SolanaClient {
             let signature = self.sign(paths[i].clone(), tx.message_data()).await?;
             tx.add_signature(i, signature);
         }
+
+        ic_cdk::println!(
+            "[solana_client::send_raw_transaction] signed tx : {:#?}",
+            tx
+        );
+
         let response: Result<(RpcResult<String>,), _> = ic_cdk::call(
             self.sol_canister_id,
             "sol_sendRawTransaction",
@@ -357,9 +379,19 @@ impl SolanaClient {
         )
         .await;
         let signature = response
-            .map_err(|e| anyhow!(format!("send raw transaction err: {:?}", e)))?
+            .map_err(|e| {
+                anyhow!(format!(
+                    "[solana_client::send_raw_transaction] call send raw transaction err: {:?}",
+                    e
+                ))
+            })?
             .0
-            .map_err(|e| anyhow!(format!("send raw transaction rpc error: {:?}", e)))?;
+            .map_err(|e| {
+                anyhow!(format!(
+                    "[solana_client::send_raw_transaction] rpc error: {:?}",
+                    e
+                ))
+            })?;
         ic_cdk::println!("{}", signature);
         Ok(signature)
     }

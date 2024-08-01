@@ -7,7 +7,7 @@ use serde::Serialize;
 use std::str::FromStr;
 
 /// An Account with data that is stored on a chain
-#[derive(Deserialize, PartialEq, Eq, Clone, Default, CandidType,Serialize)]
+#[derive(Deserialize, PartialEq, Eq, Clone, Default, CandidType,Serialize,Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Account {
     /// lamports in the account

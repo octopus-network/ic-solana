@@ -32,6 +32,12 @@ CANISTER_ID=$(dfx canister id ic-solana-provider)
 echo "Solana canister id: $CANISTER_ID"
 
 # Deploy the test canister
+CANISTER=test_canister
+CANISTER_WASM=target/wasm32-unknown-unknown/release/$(echo $CANISTER | tr '-' '_').wasm
+
+# Extract the did file
+candid-extractor $CANISTER_WASM > ./src/$CANISTER/$CANISTER.did
+
 dfx deploy test_canister --argument "( \"${CANISTER_ID}\", \"${SCHNORR_CANISTER_ID}\")" --mode=reinstall -y
 
 echo "Test canister id: $CANISTER_ID"

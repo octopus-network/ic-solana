@@ -333,14 +333,15 @@ impl RpcClient {
             return Err(e.into());
         }
 
-        let not_found_error = || RpcError::Text(format!("AccountNotFound: pubkey={}", pubkey));
+        // let not_found_error = || RpcError::Text(format!("AccountNotFound: pubkey={}", pubkey));
         if json_response.result.is_none() {
-            return Ok(None)
+            return Ok(None);
         }
 
         let rpc_account = json_response.result.unwrap();
-        Ok(rpc_account.value.map(|a|serde_json::to_string(&a.decode()).unwrap()))
-
+        Ok(rpc_account
+            .value
+            .map(|a| serde_json::to_string(&a.decode()).unwrap()))
     }
 
     ///
@@ -571,20 +572,29 @@ impl RpcClient {
         signatures: &[Signature],
         config: RpcSignatureStatusConfig,
     ) -> RpcResult<Vec<TransactionStatus>> {
+        let sigs = signatures.iter().map(|s| s.to_string()).collect::<Vec<_>>();
         let payload = RpcRequest::GetSignatureStatuses
-            .build_request_json(self.next_request_id(), json!([signatures, config]))
+            .build_request_json(self.next_request_id(), json!([sigs, config]))
             .to_string();
 
         let response = self.call(&payload, 128).await?;
 
-        let json_response =
-            serde_json::from_str::<JsonRpcResponse<Vec<TransactionStatus>>>(&response)?;
+        let json_response = serde_json::from_str::<
+            JsonRpcResponse<Response<Option<Vec<TransactionStatus>>>>,
+        >(&response)?;
+
+        //     let json_response =
+        //     serde_json::from_str::<JsonRpcResponse<Response<Option<UiAccount>>>>(&response)?;
 
         if let Some(e) = json_response.error {
-            Err(e.into())
-        } else {
-            Ok(json_response.result.unwrap())
+            return Err(e.into());
         }
+
+        let not_found_error =
+            || RpcError::Text(format!("StatusNotFound: signatures={:?}", signatures));
+        let rpc_account = json_response.result.ok_or_else(not_found_error)?;
+        let status = rpc_account.value.ok_or_else(not_found_error)?;
+        Ok(status)
     }
 
     ///
@@ -636,15 +646,16 @@ impl RpcClient {
             .call(&payload, TRANSACTION_RESPONSE_SIZE_ESTIMATE)
             .await?;
 
-        let json_response = serde_json::from_str::<
-            JsonRpcResponse<EncodedConfirmedTransactionWithStatusMeta>,
-        >(&response)?;
+        // let json_response = serde_json::from_str::<
+        //     JsonRpcResponse<String>,
+        // >(&response)?;
 
-        if let Some(e) = json_response.error {
-            Err(e.into())
-        } else {
-            Ok(serde_json::to_string(&json_response.result.unwrap()).unwrap())
-        }
+        // if let Some(e) = json_response.error {
+        //     Err(e.into())
+        // } else {
+        //     Ok(serde_json::to_string(&json_response.result.unwrap()).unwrap())
+        // }
+        Ok(response)
     }
 
     ///
