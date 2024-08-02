@@ -1,4 +1,5 @@
 #![allow(deprecated)]
+#![allow(dead_code)]
 
 use crate::{
     extension::ExtensionType,

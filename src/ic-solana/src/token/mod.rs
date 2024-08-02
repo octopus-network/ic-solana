@@ -4,12 +4,14 @@ use crate::rpc_client::RpcResult;
 use crate::token::associated_account::get_associated_token_address_with_program_id;
 use crate::token::constants::token22_program_id;
 
+use crate::logs::INFO;
 use crate::token::token_metadata::{OptionalNonZeroPubkey, TokenMetadata};
 use crate::types::{
     Account, AccountMeta, BlockHash, Instruction, Message, Pubkey, Signature, Transaction,
 };
 use anyhow::anyhow;
 use candid::{CandidType, Principal};
+use ic_canister_log::log;
 use serde::{Deserialize, Serialize};
 use serde_bytes::ByteBuf;
 use std::str::FromStr;
@@ -84,7 +86,11 @@ impl SolanaClient {
             amount,
         )
         .unwrap()];
-        ic_cdk::println!("[solana_client::mint_to] instructions: {:?} ", instructions);
+        log!(
+            INFO,
+            "[solana_client::mint_to] instructions: {:?} ",
+            instructions
+        );
 
         let tx_hash = self
             .send_raw_transaction(
@@ -146,7 +152,8 @@ impl SolanaClient {
         owner: &Pubkey,
         token_mint: &Pubkey,
     ) -> anyhow::Result<Pubkey> {
-        ic_cdk::println!(
+        log!(
+            INFO,
             "[solana_client::associated_account] owner: {:?}, token_mint: {:?} ",
             owner.to_string(),
             token_mint.to_string()
@@ -154,7 +161,7 @@ impl SolanaClient {
         let associated_account =
             get_associated_token_address_with_program_id(owner, token_mint, &token22_program_id());
 
-        ic_cdk::println!(
+        log!(INFO,
                 "[solana_client::associated_account] get_associated_token_address_with_program_id: {:?}",
                 associated_account.to_string()
             );
@@ -174,15 +181,13 @@ impl SolanaClient {
             })?
             .0
             .map_err(|e| {
-                // match e {
-                //     RpcError::Text()
-                // }
                 anyhow!(format!(
                     "[solana_client::associated_account] sol_getAccountInfo rpc error:{:?}",
                     e
                 ))
             })?;
-        ic_cdk::println!(
+        log!(
+            INFO,
             "[solana_client::associated_account] sol_getAccountInfo resp: {:#?} ",
             resp
         );
@@ -194,7 +199,7 @@ impl SolanaClient {
                     .create_associated_token_account(owner, token_mint)
                     .await?;
 
-                ic_cdk::println!(
+                log!(INFO,
                     "[solana_client::associated_account] create_associated_token_account based on {} and {} is {:?} .\nThe signature: {:?} ",
                     owner.to_string(),
                     token_mint.to_string(),
@@ -205,10 +210,10 @@ impl SolanaClient {
                 Ok(associated_account)
             }
             Some(account) => {
-                ic_cdk::println!("[solana_client::associated_account] The associate account is already exists: {:?} ", account);
+                log!(INFO,"[solana_client::associated_account] The associate account is already exists: {:?} ", account);
                 let account = serde_json::from_str::<Option<Account>>(&account)?;
-                //TODO: how to confirm the associated_account ?
-                ic_cdk::println!(
+                log!(
+                    INFO,
                     "[solana_client::associated_account] The associate account owner is :{:?} ",
                     account.unwrap().owner.to_string()
                 );
@@ -230,8 +235,9 @@ impl SolanaClient {
                 &token22_program_id(),
             ),
         ];
-        ic_cdk::println!(
-            "[solana_client::create_associated_token_account] instructions :{:#?} ",
+        log!(
+            INFO,
+            "[solana_client::create_associated_token_account] instructions :{:?} ",
             instructions
         );
 
@@ -367,8 +373,9 @@ impl SolanaClient {
             tx.add_signature(i, signature);
         }
 
-        ic_cdk::println!(
-            "[solana_client::send_raw_transaction] signed tx : {:#?}",
+        log!(
+            INFO,
+            "[solana_client::send_raw_transaction] signed tx : {:?}",
             tx
         );
 
@@ -392,7 +399,7 @@ impl SolanaClient {
                     e
                 ))
             })?;
-        ic_cdk::println!("{}", signature);
+        log!(INFO, "{}", signature);
         Ok(signature)
     }
 }

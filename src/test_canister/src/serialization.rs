@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 //! serialization module - contains helpers for serde types from other crates,
 //! deserialization visitors
 

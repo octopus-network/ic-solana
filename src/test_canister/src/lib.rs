@@ -1,4 +1,4 @@
-use candid::{CandidType, Principal};
+use candid::Principal;
 
 use serde_bytes::ByteBuf;
 

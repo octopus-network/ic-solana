@@ -1,6 +1,6 @@
 pub(crate) mod constants;
 pub mod eddsa;
-pub(crate) mod logs;
+pub mod logs;
 pub mod request;
 pub mod response;
 pub mod rpc_client;
