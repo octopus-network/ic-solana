@@ -13,7 +13,7 @@ pub async fn sign_with_eddsa(
     message: Vec<u8>,
 ) -> Vec<u8> {
     let schnorr_canister = schnorr_canister_id;
-    let res: Result<(SignWithSchnorrReply,), _> = ic_cdk::call(
+    let res: Result<(SignWithSchnorrReply,), _> = ic_cdk::api::call::call_with_payment(
         schnorr_canister,
         "sign_with_schnorr",
         (SignWithSchnorrArgs {
@@ -24,6 +24,7 @@ pub async fn sign_with_eddsa(
                 algorithm: SchnorrAlgorithm::Ed25519,
             },
         },),
+        25_000_000_000,
     )
     .await;
 

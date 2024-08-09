@@ -69,6 +69,53 @@ pub fn initialize(
     }
 }
 
+/// Update field instruction data
+
+#[derive(Clone, Debug, PartialEq, BorshSerialize, BorshDeserialize)]
+pub struct UpdateField {
+    /// Field to update in the metadata
+    pub field: Field,
+    /// Value to write for the field
+    pub value: String,
+}
+/// Fields in the metadata account, used for updating
+#[derive(Clone, Debug, PartialEq, BorshSerialize, BorshDeserialize)]
+pub enum Field {
+    /// The name field, corresponding to `TokenMetadata.name`
+    Name,
+    /// The symbol field, corresponding to `TokenMetadata.symbol`
+    Symbol,
+    /// The uri field, corresponding to `TokenMetadata.uri`
+    Uri,
+    /// A user field, whose key is given by the associated string
+    Key(String),
+}
+
+/// Creates an `UpdateField` instruction
+pub fn update_field(
+    program_id: &Pubkey,
+    metadata: &Pubkey,
+    update_authority: &Pubkey,
+    field: Field,
+    value: String,
+) -> Instruction {
+    let update_field = UpdateField { field, value };
+    // build discriminator
+    // let preimage = hash::hashv(&[format!("{NAMESPACE}:updating_field").as_bytes()]);
+    //     let discriminator =
+    //         ArrayDiscriminator::try_from(&preimage.as_ref()[..ArrayDiscriminator::LENGTH]).unwrap();
+    let mut data: Vec<u8> = vec![221, 233, 49, 45, 181, 202, 220, 200];
+    data.append(&mut borsh::to_vec(&update_field).unwrap());
+    Instruction {
+        program_id: *program_id,
+        accounts: vec![
+            AccountMeta::new(*metadata, false),
+            AccountMeta::new_readonly(*update_authority, true),
+        ],
+        data,
+    }
+}
+
 macro_rules! impl_get_instance_packed_len {
     ($borsh:ident, $borsh_io:ident $(,#[$meta:meta])?) => {
         /// Helper struct which to count how much data would be written during serialization

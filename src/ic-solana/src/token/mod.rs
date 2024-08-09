@@ -15,6 +15,7 @@ use ic_canister_log::log;
 use serde::{Deserialize, Serialize};
 use serde_bytes::ByteBuf;
 use std::str::FromStr;
+use token_metadata::Field;
 
 pub mod associated_account;
 pub mod constants;
@@ -25,7 +26,7 @@ pub mod token_instruction;
 pub mod token_metadata;
 
 #[derive(CandidType, Deserialize, Serialize, Clone, Debug, PartialEq, Eq)]
-pub struct TokenCreateInfo {
+pub struct TokenInfo {
     pub name: String,
     pub symbol: String,
     pub decimals: u8,
@@ -101,7 +102,7 @@ impl SolanaClient {
         Ok(tx_hash)
     }
 
-    pub async fn create_mint(&self, token_create_info: TokenCreateInfo) -> anyhow::Result<Pubkey> {
+    pub async fn create_mint(&self, token_create_info: TokenInfo) -> anyhow::Result<Pubkey> {
         let space: usize = 82;
         // get rent exemption
         let response: Result<(RpcResult<u64>,), _> = ic_cdk::call(
@@ -250,10 +251,7 @@ impl SolanaClient {
         Ok(tx_hash)
     }
 
-    pub async fn create_mint_with_metadata(
-        &self,
-        token_info: TokenCreateInfo,
-    ) -> anyhow::Result<Pubkey> {
+    pub async fn create_mint_with_metadata(&self, token_info: TokenInfo) -> anyhow::Result<Pubkey> {
         let token_mint = Self::derive_account(
             self.schnorr_canister.clone(),
             self.chainkey_name.clone(),
@@ -341,6 +339,68 @@ impl SolanaClient {
             accounts,
             data,
         }
+    }
+
+    pub async fn update_metadata(
+        &self,
+        token_mint: Pubkey,
+        token_info: TokenInfo,
+    ) -> anyhow::Result<String> {
+        let metadata = TokenMetadata {
+            update_authority: OptionalNonZeroPubkey(self.payer.to_owned()),
+            mint: token_mint,
+            name: token_info.name.clone(),
+            symbol: token_info.symbol.clone(),
+            uri: token_info.uri.clone(),
+            additional_metadata: vec![],
+        };
+        let space = metadata.tlv_size_of().unwrap() + 238;
+        let response: Result<(RpcResult<u64>,), _> = ic_cdk::call(
+            self.sol_canister_id,
+            "sol_getminimumbalanceforrentexemption",
+            (space,),
+        )
+        .await;
+        let rent_exemption = response
+            .map_err(|e| anyhow!(format!("query rent err: {:?}", e)))?
+            .0
+            .map_err(|e| anyhow!(format!("query rent rpc error: {:?}", e)))?;
+        let mut instructions = vec![system_instruction::transfer(
+            &self.payer,
+            &token_mint,
+            rent_exemption,
+        )];
+        instructions.push(token_metadata::update_field(
+            &token22_program_id(),
+            &token_mint,
+            &self.payer,
+            Field::Name,
+            token_info.name.clone(),
+        ));
+
+        instructions.push(token_metadata::update_field(
+            &token22_program_id(),
+            &token_mint,
+            &self.payer,
+            Field::Symbol,
+            token_info.symbol.clone(),
+        ));
+
+        instructions.push(token_metadata::update_field(
+            &token22_program_id(),
+            &token_mint,
+            &self.payer,
+            Field::Uri,
+            token_info.uri.clone(),
+        ));
+
+        let tx_hash = self
+            .send_raw_transaction(
+                instructions.as_slice(),
+                vec![self.payer_derive_path.clone()],
+            )
+            .await?;
+        Ok(tx_hash)
     }
 
     async fn sign(&self, key_path: Vec<ByteBuf>, tx: Vec<u8>) -> anyhow::Result<Signature> {

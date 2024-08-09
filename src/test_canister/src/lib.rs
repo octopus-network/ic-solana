@@ -7,7 +7,7 @@ use std::str::FromStr;
 
 use ic_cdk::update;
 
-use ic_solana::token::{SolanaClient, TokenCreateInfo};
+use ic_solana::token::{SolanaClient, TokenInfo};
 use ic_solana::types::Pubkey;
 pub mod extension;
 pub mod instruction_error;
@@ -86,7 +86,7 @@ async fn create_token() -> String {
         chainkey_name: "test_key_1".to_string(),
         schnorr_canister: schnorr_canister(),
     };
-    let token_info = TokenCreateInfo {
+    let token_info = TokenInfo {
         name: "YHTX".to_string(),
         symbol: "YHTX".to_string(),
         decimals: 2,
@@ -97,7 +97,7 @@ async fn create_token() -> String {
 }
 
 #[update]
-async fn create_token_with_metadata() -> String {
+async fn create_token_with_metadata(token_info: TokenInfo) -> String {
     let c = SolanaClient::derive_account(
         schnorr_canister(),
         "test_key_1".to_string(),
@@ -112,12 +112,12 @@ async fn create_token_with_metadata() -> String {
         chainkey_name: "test_key_1".to_string(),
         schnorr_canister: schnorr_canister(),
     };
-    let token_info = TokenCreateInfo {
-        name: "YHTCC".to_string(),
-        symbol: "YHTCC".to_string(),
-        decimals: 2,
-        uri: "".to_string(),
-    };
+    // let token_info = TokenInfo {
+    //     name: "YHTCC".to_string(),
+    //     symbol: "YHTCC".to_string(),
+    //     decimals: 2,
+    //     uri: "".to_string(),
+    // };
     let r = s.create_mint_with_metadata(token_info).await.unwrap();
     r.to_string()
 }
@@ -196,6 +196,29 @@ async fn mint_to(to_account: String, amount: u64, token_mint: String) -> String 
         .mint_to(associated_account, amount, token_mint)
         .await
         .unwrap();
+    r.to_string()
+}
+
+#[update]
+async fn update_token_metadata(token_mint: String, token_info: TokenInfo) -> String {
+    let c = SolanaClient::derive_account(
+        schnorr_canister(),
+        "test_key_1".to_string(),
+        "custom_payer".to_string(),
+    )
+    .await;
+
+    let token_mint = Pubkey::from_str(&token_mint).unwrap();
+
+    let s = SolanaClient {
+        sol_canister_id: sol_canister_id(),
+        payer: c,
+        payer_derive_path: vec![ByteBuf::from("custom_payer")],
+        chainkey_name: "test_key_1".to_string(),
+        schnorr_canister: schnorr_canister(),
+    };
+
+    let r = s.update_metadata(token_mint, token_info).await.unwrap();
     r.to_string()
 }
 

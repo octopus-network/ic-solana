@@ -24,7 +24,12 @@ SCHNORR_CANISTER_ID=$(dfx canister id schnorr_canister)
 echo "Schnorr canister id: $CANISTER_ID"
 
 # Deploy the solana canister and set the schnorr canister id
-dfx deploy ic-solana-provider --argument "( record { nodesInSubnet = 28; schnorr_canister = opt \"${SCHNORR_CANISTER_ID}\" } )" --mode=reinstall -y
+SOLANA_RPC_URL="testnet"
+dfx deploy ic-solana-provider --argument "( record { 
+    nodesInSubnet = 28; 
+    schnorr_canister = opt \"${SCHNORR_CANISTER_ID}\";
+    rpc_url = opt \"${SOLANA_RPC_URL}\"; 
+    } )" --mode=reinstall -y
 
 # Get the canister id
 CANISTER_ID=$(dfx canister id ic-solana-provider)

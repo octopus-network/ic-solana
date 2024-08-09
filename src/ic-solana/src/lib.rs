@@ -1,5 +1,6 @@
 pub(crate) mod constants;
 pub mod eddsa;
+pub mod threshold_schnorr;
 pub mod logs;
 pub mod request;
 pub mod response;
