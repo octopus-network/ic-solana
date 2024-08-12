@@ -403,6 +403,40 @@ impl SolanaClient {
         Ok(tx_hash)
     }
 
+    pub async fn transfer_to(&self, to_account: Pubkey, amount: u64) -> anyhow::Result<String> {
+        let response: Result<(RpcResult<u64>,), _> = ic_cdk::call(
+            self.sol_canister_id,
+            "sol_getBalance",
+            (to_account.to_string(),),
+        )
+        .await;
+
+        let lamports = response
+            .map_err(|e| anyhow!(format!("sol_getBalance err: {:?}", e)))?
+            .0
+            .map_err(|e| anyhow!(format!("sol_getBalance rpc error: {:?}", e)))?;
+
+        let fee = 10_000;
+
+        if lamports <= amount + fee {
+            ic_cdk::trap("Not enough lamports");
+        }
+
+        let instructions = vec![system_instruction::transfer(
+            &self.payer,
+            &to_account,
+            amount,
+        )];
+
+        let tx_hash = self
+            .send_raw_transaction(
+                instructions.as_slice(),
+                vec![self.payer_derive_path.clone()],
+            )
+            .await?;
+        Ok(tx_hash)
+    }
+
     async fn sign(&self, key_path: Vec<ByteBuf>, tx: Vec<u8>) -> anyhow::Result<Signature> {
         let signature = sign_with_eddsa(
             self.schnorr_canister,

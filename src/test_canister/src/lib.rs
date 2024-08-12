@@ -221,7 +221,28 @@ async fn update_token_metadata(token_mint: String, token_info: TokenInfo) -> Str
     let r = s.update_metadata(token_mint, token_info).await.unwrap();
     r.to_string()
 }
+#[ic_cdk::update]
+async fn transfer_to(to_account: String, amount: u64) -> String {
+    let c = SolanaClient::derive_account(
+        schnorr_canister(),
+        "test_key_1".to_string(),
+        "custom_payer".to_string(),
+    )
+    .await;
+    let s = SolanaClient {
+        sol_canister_id: sol_canister_id(),
+        payer: c,
+        payer_derive_path: vec![ByteBuf::from("custom_payer")],
+        chainkey_name: "test_key_1".to_string(),
+        schnorr_canister: schnorr_canister(),
+    };
+    let to_account = Pubkey::from_str(&to_account).unwrap();
+    let response = s.transfer_to(to_account, amount).await;
 
+    let signature = response.unwrap();
+    ic_cdk::println!("Signature: {:?}", signature);
+    signature
+}
 ic_cdk::export_candid!();
 
 #[cfg(test)]
