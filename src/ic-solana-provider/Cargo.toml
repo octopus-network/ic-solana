@@ -18,6 +18,10 @@ ic-solana = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_bytes = { workspace = true }
+ic-canisters-http-types = { workspace = true }
+ic-canister-log = { workspace = true }
+ciborium = "0.2.1"
+ic-stable-structures = "0.6"
 
 [dev-dependencies]
 bincode = "1.3.3"

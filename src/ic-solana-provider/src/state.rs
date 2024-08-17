@@ -1,13 +1,14 @@
 use crate::constants::{NODES_IN_FIDUCIARY_SUBNET, SCHNORR_KEY_NAME};
 use candid::{CandidType, Deserialize};
 use ic_solana::types::Cluster;
+use serde::Serialize;
 use std::cell::RefCell;
+use std::collections::BTreeMap;
 use std::env;
-
 thread_local! {
     pub static STATE: RefCell<Option<State>> = RefCell::default();
 }
-
+use ic_cdk::api::management_canister::http_request::HttpResponse;
 /// Solana RPC canister initialization data.
 #[derive(Debug, Deserialize, CandidType, Clone)]
 pub struct InitArgs {
@@ -17,12 +18,13 @@ pub struct InitArgs {
     pub schnorr_key_name: Option<String>,
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct State {
     pub rpc_url: String,
     pub schnorr_canister: String,
     pub schnorr_key_name: String,
     pub nodes_in_subnet: u32,
+    pub responses: BTreeMap<u64, HttpResponse>,
 }
 
 impl From<InitArgs> for State {
@@ -35,6 +37,7 @@ impl From<InitArgs> for State {
                 .schnorr_key_name
                 .unwrap_or(SCHNORR_KEY_NAME.to_string()),
             nodes_in_subnet: value.nodes_in_subnet.unwrap_or(NODES_IN_FIDUCIARY_SUBNET),
+            responses: BTreeMap::default(),
         }
     }
 }
@@ -65,6 +68,12 @@ where
 /// Panics if there is no state.
 pub fn read_state<R>(f: impl FnOnce(&State) -> R) -> R {
     STATE.with(|s| f(s.borrow().as_ref().expect("State not initialized!")))
+}
+
+pub fn replace_state(state: State) {
+    STATE.with(|s| {
+        *s.borrow_mut() = Some(state);
+    });
 }
 
 /// Mutates (part of) the current state using `f`.

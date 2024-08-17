@@ -1,25 +1,35 @@
 use crate::types::SendTransactionRequest;
 use crate::utils::{rpc_client, validate_caller_not_anonymous};
 use eddsa_api::{eddsa_public_key, sign_with_eddsa};
+use ic_canister_log::export as export_logs;
+use ic_canister_log::log;
+use ic_canisters_http_types::{HttpRequest, HttpResponse, HttpResponseBuilder};
 use ic_cdk::api::management_canister::http_request::{
-    CanisterHttpRequestArgument, HttpHeader, HttpMethod, HttpResponse, TransformArgs,
+    CanisterHttpRequestArgument, HttpHeader, HttpMethod, HttpResponse as TransformedHttpResponse,
+    TransformArgs,
 };
 use ic_cdk::{query, update};
 use ic_solana::http_request_required_cycles;
-use ic_solana::rpc_client::RpcResult;
+use ic_solana::logs::{DEBUG, ERROR, INFO};
+use ic_solana::response::{OptionalContext, RpcBlockhash};
+use ic_solana::rpc_client::{JsonRpcResponse, RpcResult};
 use ic_solana::types::{
     BlockHash, EncodingConfig, Instruction, Message, Pubkey, RpcAccountInfoConfig,
     RpcContextConfig, RpcSendTransactionConfig, RpcSignatureStatusConfig, RpcTransactionConfig,
     Signature, Transaction, TransactionStatus, UiAccountEncoding, UiTokenAmount,
     UiTransactionEncoding,
 };
+use ic_stable_structures::writer::Writer;
+use ic_stable_structures::Memory;
+// use migration::{migrate, PreState};
 use serde_bytes::ByteBuf;
 use serde_json::{from_str, json, Value};
-use state::{mutate_state, read_state, InitArgs, STATE};
+use state::{mutate_state, read_state, replace_state, InitArgs, State, STATE};
 use std::str::FromStr;
-
 mod constants;
 pub mod eddsa_api;
+mod memory;
+mod migration;
 pub mod state;
 pub mod types;
 mod utils;
@@ -51,7 +61,7 @@ pub async fn request(method: String, params: String, max_response_bytes: u64) ->
         "method": &method,
         "params": parsed_params
     }))?;
-    client.call(&payload, max_response_bytes).await
+    client.call(&payload, max_response_bytes, None).await
 }
 
 ///
@@ -261,12 +271,121 @@ pub async fn send_raw_transaction(raw_signed_transaction: String) -> RpcResult<S
 /// * `args` - Transformation arguments containing the HTTP response.
 ///
 #[query(hidden = true)]
-fn cleanup_response(mut args: TransformArgs) -> HttpResponse {
+fn cleanup_response(mut args: TransformArgs) -> TransformedHttpResponse {
     // The response header contains non-deterministic fields that make it impossible to reach consensus!
     // Errors seem deterministic and do not contain data that can break consensus.
     // Clear non-deterministic fields from the response headers.
+
+    log!(
+        INFO,
+        "[ic-solana-provider] cleanup_response TransformArgs: {:?}",
+        args
+    );
+    let timestamp = ic_cdk::api::time();
+    mutate_state(|s| {
+        log!(DEBUG, "[ic-solana-provider] save response to state");
+        s.responses.insert(timestamp, args.response.clone())
+    });
     args.response.headers.clear();
     args.response
+}
+
+#[query(hidden = true)]
+fn transform_blockhash(mut args: TransformArgs) -> TransformedHttpResponse {
+    // The response header contains non-deterministic fields that make it impossible to reach consensus!
+    // Errors seem deterministic and do not contain data that can break consensus.
+    // Clear non-deterministic fields from the response headers.
+
+    log!(
+        INFO,
+        "[ic-solana-provider] transform_blockhash TransformArgs: {:?}",
+        args
+    );
+    // let timestamp = ic_cdk::api::time();
+    // mutate_state(|s| {
+    //     log!(DEBUG, "[ic-solana-provider] save response to state");
+    //     s.responses.insert(timestamp, args.response.clone())
+    // });
+    let block_hash_body = String::from_utf8(args.response.body.clone()).unwrap();
+    let json_response =
+        serde_json::from_str::<JsonRpcResponse<OptionalContext<RpcBlockhash>>>(&block_hash_body)
+            .unwrap();
+    log!(
+        INFO,
+        "[ic-solana-provider] transform_blockhash json_response : {:?}",
+        json_response
+    );
+    if let Some(e) = json_response.error {
+        log!(
+            ERROR,
+            "[ic-solana-provider] transform_blockhash response error: {:?}",
+            e
+        );
+        args.response.headers.clear();
+        args.response
+    } else {
+        args.response.headers.clear();
+        TransformedHttpResponse {
+            status: args.response.status,
+            headers: vec![],
+            body: args.response.body,
+        }
+    }
+}
+
+#[query]
+fn get_responses() -> Vec<(u64, TransformedHttpResponse)> {
+    read_state(|s| {
+        s.responses
+            .iter()
+            .map(|(timestamp, resp)| (timestamp.to_owned(), resp.to_owned()))
+            .collect::<Vec<_>>()
+    })
+}
+
+#[query(hidden = true)]
+fn http_request(req: HttpRequest) -> HttpResponse {
+    if ic_cdk::api::data_certificate().is_none() {
+        ic_cdk::trap("update call rejected");
+    }
+
+    if req.path() == "/logs" {
+        use serde_json;
+        use std::str::FromStr;
+
+        let max_skip_timestamp = match req.raw_query_param("time") {
+            Some(arg) => match u64::from_str(arg) {
+                Ok(value) => value,
+                Err(_) => {
+                    return HttpResponseBuilder::bad_request()
+                        .with_body_and_content_length("failed to parse the 'time' parameter")
+                        .build()
+                }
+            },
+            None => 0,
+        };
+
+        let mut entries = vec![];
+        for entry in export_logs(&ic_solana::logs::INFO_BUF) {
+            entries.push(entry);
+        }
+        for entry in export_logs(&ic_solana::logs::DEBUG_BUF) {
+            entries.push(entry);
+        }
+        for entry in export_logs(&ic_solana::logs::ERROR_BUF) {
+            entries.push(entry);
+        }
+        for entry in export_logs(&ic_solana::logs::TRACE_HTTP_BUF) {
+            entries.push(entry);
+        }
+        entries.retain(|entry| entry.timestamp >= max_skip_timestamp);
+        HttpResponseBuilder::ok()
+            .header("Content-Type", "application/json; charset=utf-8")
+            .with_body_and_content_length(serde_json::to_string(&entries).unwrap_or_default())
+            .build()
+    } else {
+        HttpResponseBuilder::not_found().build()
+    }
 }
 
 #[ic_cdk::init]
@@ -276,14 +395,56 @@ fn init(args: InitArgs) {
     });
 }
 
+#[ic_cdk::pre_upgrade]
+pub fn pre_upgrade() {
+    // Serialize the state.
+    let mut state_bytes = vec![];
+    let _ = read_state(|s| ciborium::ser::into_writer(&s, &mut state_bytes));
+    // Write the length of the serialized bytes to memory, followed by the
+    // by the bytes themselves.
+    let len = state_bytes.len() as u32;
+    let mut memory = memory::get_upgrades_memory();
+    let mut writer = Writer::new(&mut memory, 0);
+    writer
+        .write(&len.to_le_bytes())
+        .expect("failed to save hub state len");
+    writer
+        .write(&state_bytes)
+        .expect("failed to save hub state");
+}
+
 #[ic_cdk::post_upgrade]
 fn post_upgrade(args: InitArgs) {
-    if let Some(v) = args.nodes_in_subnet {
-        mutate_state(|s| s.nodes_in_subnet = v);
-    }
+    let memory = memory::get_upgrades_memory();
+    // Read the length of the state bytes.
+    let mut state_len_bytes = [0; 4];
+    memory.read(0, &mut state_len_bytes);
+    let state_len = u32::from_le_bytes(state_len_bytes) as usize;
+
+    // Read the bytes
+    let mut state_bytes = vec![0; state_len];
+    memory.read(4, &mut state_bytes);
+
+    // Deserialize pre state
+    let pre_state: State =
+        ciborium::de::from_reader(&*state_bytes).expect("failed to decode state");
+    // let new_state = migrate(pre_state);
+    replace_state(pre_state);
+
+    // update args
     if let Some(v) = args.rpc_url {
         mutate_state(|s| s.rpc_url = v);
     }
+    if let Some(v) = args.nodes_in_subnet {
+        mutate_state(|s| s.nodes_in_subnet = v);
+    }
+    if let Some(v) = args.schnorr_canister {
+        mutate_state(|s| s.schnorr_canister = v);
+    }
+    if let Some(v) = args.schnorr_key_name {
+        mutate_state(|s| s.schnorr_key_name = v);
+    }
+    log!(DEBUG, "[ic-solana-provider] upgrade successfully!");
 }
 
 ic_cdk::export_candid!();
