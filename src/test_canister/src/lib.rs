@@ -17,7 +17,8 @@ pub mod serialization;
 pub mod system_instruction;
 pub mod token_error;
 pub mod token_instruction;
-
+use ic_solana::token::associated_account::get_associated_token_address_with_program_id;
+use ic_solana::token::constants::token22_program_id;
 mod utils;
 
 thread_local! {
@@ -104,7 +105,12 @@ async fn create_token_with_metadata(token_info: TokenInfo) -> String {
         "custom_payer".to_string(),
     )
     .await;
-
+    let mint_account = SolanaClient::derive_account(
+        schnorr_canister(),
+        "test_key_1".to_string(),
+        token_info.name.to_string(),
+    )
+    .await;
     let s = SolanaClient {
         sol_canister_id: sol_canister_id(),
         payer: c,
@@ -118,7 +124,10 @@ async fn create_token_with_metadata(token_info: TokenInfo) -> String {
     //     decimals: 2,
     //     uri: "".to_string(),
     // };
-    let r = s.create_mint_with_metadata(token_info).await.unwrap();
+    let r = s
+        .create_mint_with_metadata(mint_account, token_info)
+        .await
+        .unwrap();
     r.to_string()
 }
 
@@ -163,7 +172,10 @@ async fn create_ata(to_address: String, token_mint: String) -> String {
     };
     let to_addr = Pubkey::from_str(&to_address).unwrap();
     let token_mint = Pubkey::from_str(&token_mint).unwrap();
-    let r = s.associated_account(&to_addr, &token_mint).await.unwrap();
+    let r = s
+        .create_associated_token_account(&to_addr, &token_mint)
+        .await
+        .unwrap();
     r.to_string()
 }
 
@@ -187,10 +199,11 @@ async fn mint_to(to_account: String, amount: u64, token_mint: String) -> String 
     let to_account = Pubkey::from_str(to_account.as_str()).unwrap();
     let token_mint = Pubkey::from_str(token_mint.as_str()).unwrap();
 
-    let associated_account = s
-        .associated_account(&to_account, &token_mint)
-        .await
-        .unwrap();
+    let associated_account = get_associated_token_address_with_program_id(
+        &to_account,
+        &token_mint,
+        &token22_program_id(),
+    );
 
     let r = s
         .mint_to(associated_account, amount, token_mint)

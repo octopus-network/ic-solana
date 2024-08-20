@@ -22,6 +22,7 @@ use ic_solana::types::{
 use ic_stable_structures::writer::Writer;
 use ic_stable_structures::Memory;
 // use migration::{migrate, PreState};
+use candid::Nat;
 use serde_bytes::ByteBuf;
 use serde_json::{from_str, json, Value};
 use state::{mutate_state, read_state, replace_state, InitArgs, State, STATE};
@@ -253,6 +254,12 @@ pub async fn sol_send_transaction(req: SendTransactionRequest) -> RpcResult<Stri
 ///
 #[update(name = "sol_sendRawTransaction")]
 pub async fn send_raw_transaction(raw_signed_transaction: String) -> RpcResult<String> {
+    log!(
+        INFO,
+        "[ic-solana-provider] send_raw_transaction raw_signed_transaction: {:?}",
+        raw_signed_transaction
+    );
+
     let client = rpc_client();
 
     let tx = Transaction::from_str(&raw_signed_transaction).expect("Invalid transaction");
@@ -281,56 +288,63 @@ fn cleanup_response(mut args: TransformArgs) -> TransformedHttpResponse {
         "[ic-solana-provider] cleanup_response TransformArgs: {:?}",
         args
     );
-    let timestamp = ic_cdk::api::time();
-    mutate_state(|s| {
-        log!(DEBUG, "[ic-solana-provider] save response to state");
-        s.responses.insert(timestamp, args.response.clone())
-    });
     args.response.headers.clear();
     args.response
 }
 
 #[query(hidden = true)]
-fn transform_blockhash(mut args: TransformArgs) -> TransformedHttpResponse {
-    // The response header contains non-deterministic fields that make it impossible to reach consensus!
-    // Errors seem deterministic and do not contain data that can break consensus.
-    // Clear non-deterministic fields from the response headers.
+fn transform_tx_response(mut args: TransformArgs) -> TransformedHttpResponse {
+    log!(
+        INFO,
+        "[ic-solana-provider] transform_tx_response TransformArgs: {:?}",
+        args
+    );
+    args.response.headers.clear();
+    args.response.status = Nat::from(200u32);
+    args.response.body = args.context;
 
+    log!(
+        INFO,
+        "[ic-solana-provider] transform_tx_response transformed response: {:?}",
+        args.response
+    );
+    args.response
+}
+
+#[query(hidden = true)]
+fn transform_blockhash(mut args: TransformArgs) -> TransformedHttpResponse {
     log!(
         INFO,
         "[ic-solana-provider] transform_blockhash TransformArgs: {:?}",
         args
     );
-    // let timestamp = ic_cdk::api::time();
-    // mutate_state(|s| {
-    //     log!(DEBUG, "[ic-solana-provider] save response to state");
-    //     s.responses.insert(timestamp, args.response.clone())
-    // });
-    let block_hash_body = String::from_utf8(args.response.body.clone()).unwrap();
-    let json_response =
-        serde_json::from_str::<JsonRpcResponse<OptionalContext<RpcBlockhash>>>(&block_hash_body)
-            .unwrap();
-    log!(
-        INFO,
-        "[ic-solana-provider] transform_blockhash json_response : {:?}",
-        json_response
-    );
-    if let Some(e) = json_response.error {
-        log!(
-            ERROR,
-            "[ic-solana-provider] transform_blockhash response error: {:?}",
-            e
-        );
-        args.response.headers.clear();
-        args.response
-    } else {
-        args.response.headers.clear();
-        TransformedHttpResponse {
-            status: args.response.status,
-            headers: vec![],
-            body: args.response.body,
-        }
-    }
+    args.response.headers.clear();
+    args.response
+    // let block_hash_body = String::from_utf8(args.response.body.clone()).unwrap();
+    // let json_response =
+    //     serde_json::from_str::<JsonRpcResponse<OptionalContext<RpcBlockhash>>>(&block_hash_body)
+    //         .unwrap();
+    // log!(
+    //     INFO,
+    //     "[ic-solana-provider] transform_blockhash json_response : {:?}",
+    //     json_response
+    // );
+    // if let Some(e) = json_response.error {
+    //     log!(
+    //         ERROR,
+    //         "[ic-solana-provider] transform_blockhash response error: {:?}",
+    //         e
+    //     );
+    //     args.response.headers.clear();
+    //     args.response
+    // } else {
+    //     args.response.headers.clear();
+    //     TransformedHttpResponse {
+    //         status: args.response.status,
+    //         headers: vec![],
+    //         body: args.response.body,
+    //     }
+    // }
 }
 
 #[query]
