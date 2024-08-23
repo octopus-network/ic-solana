@@ -31,6 +31,11 @@ pub fn http_request_required_cycles(
         .expect("Failed to encode arguments.")
         .len() as u128
         + 12;
+    // header_len = header_1.name + header_1.value + ... + header_n.name + header_n.value
+    // request_size = url.len + transform.name.len + transform.context.len + body.len + header_len
+    // http_outcall_cost = per_call_cost + per_request_byte_cost * request_size + per_response_byte_cost * max_response_size
+    // scaling_factor = subnet_size / 13
+    // total_cost = scaling_factor * http_outcall_cost
 
     (HTTP_OUTCALL_REQUEST_BASE_COST
         + HTTP_OUTCALL_REQUEST_PER_NODE_COST * nodes_in_subnet

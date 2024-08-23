@@ -88,6 +88,7 @@ async fn create_token() -> String {
         schnorr_canister: schnorr_canister(),
     };
     let token_info = TokenInfo {
+        token_id: "YHTX".to_string(),
         name: "YHTX".to_string(),
         symbol: "YHTX".to_string(),
         decimals: 2,

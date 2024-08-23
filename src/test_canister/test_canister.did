@@ -1,6 +1,7 @@
 type TokenInfo = record {
   uri : text;
   decimals : nat8;
+  token_id : text;
   name : text;
   symbol : text;
 };

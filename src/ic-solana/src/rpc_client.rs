@@ -1,5 +1,5 @@
 use crate::constants::*;
-use crate::logs::{DEBUG, TRACE_HTTP};
+use crate::logs::{DEBUG, INFO, TRACE_HTTP};
 use crate::request::RpcRequest;
 use crate::response::{
     EncodedConfirmedBlock, OptionalContext, Response, RpcBlockhash,
@@ -24,6 +24,7 @@ use ic_cdk::api::management_canister::http_request::{
     http_request, CanisterHttpRequestArgument, HttpHeader, HttpMethod, TransformContext,
 };
 use serde::Deserialize;
+use serde::Serialize;
 use serde_json::{json, Value};
 use std::cell::RefCell;
 use std::str::FromStr;
@@ -32,13 +33,13 @@ thread_local! {
     static NEXT_ID: RefCell<u64> = RefCell::default();
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct JsonRpcError {
     pub code: i64,
     pub message: String,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct JsonRpcResponse<T> {
     pub jsonrpc: String,
     pub result: Option<T>,
@@ -326,17 +327,23 @@ impl RpcClient {
             .build_request_json(self.next_request_id(), json!([pubkey.to_string(), config]))
             .to_string();
 
+        let transform = TransformContext::from_name("transform_account".to_owned(), vec![]);
         let response = self
             .call(
                 &payload,
                 max_response_bytes.unwrap_or(MAX_PDA_ACCOUNT_DATA_LENGTH),
-                None,
+                Some(transform),
             )
             .await?;
 
         let json_response =
             serde_json::from_str::<JsonRpcResponse<Response<Option<UiAccount>>>>(&response)?;
 
+        log!(
+            INFO,
+            "[rpc_client] get_account_info1 json_response : {:?}",
+            json_response
+        );
         if let Some(e) = json_response.error {
             return Err(e.into());
         }
@@ -588,14 +595,14 @@ impl RpcClient {
             .build_request_json(self.next_request_id(), json!([sigs, config]))
             .to_string();
 
-        let response = self.call(&payload, 128, None).await?;
+        let transform =
+            TransformContext::from_name("transform_signature_statuses".to_owned(), vec![]);
+
+        let response = self.call(&payload, 128, Some(transform)).await?;
 
         let json_response = serde_json::from_str::<
             JsonRpcResponse<Response<Option<Vec<TransactionStatus>>>>,
         >(&response)?;
-
-        //     let json_response =
-        //     serde_json::from_str::<JsonRpcResponse<Response<Option<UiAccount>>>>(&response)?;
 
         if let Some(e) = json_response.error {
             return Err(e.into());

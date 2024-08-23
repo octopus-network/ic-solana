@@ -11,16 +11,16 @@ use ic_cdk::api::management_canister::http_request::{
 use ic_cdk::{query, update};
 use ic_solana::http_request_required_cycles;
 use ic_solana::logs::{DEBUG, ERROR, INFO};
-use ic_solana::response::{OptionalContext, RpcBlockhash};
+use ic_solana::response::{OptionalContext, Response, RpcBlockhash};
 use ic_solana::rpc_client::{JsonRpcResponse, RpcResult};
 use ic_solana::types::{
     BlockHash, EncodingConfig, Instruction, Message, Pubkey, RpcAccountInfoConfig,
     RpcContextConfig, RpcSendTransactionConfig, RpcSignatureStatusConfig, RpcTransactionConfig,
-    Signature, Transaction, TransactionStatus, UiAccountEncoding, UiTokenAmount,
+    Signature, Transaction, TransactionStatus, UiAccount, UiAccountEncoding, UiTokenAmount,
     UiTransactionEncoding,
 };
 use ic_stable_structures::writer::Writer;
-use ic_stable_structures::Memory;
+use ic_stable_structures::{Memory, Storable};
 // use migration::{migrate, PreState};
 use candid::Nat;
 use serde_bytes::ByteBuf;
@@ -141,7 +141,75 @@ pub async fn sol_get_latest_blockhash() -> RpcResult<String> {
         .await?;
     Ok(blockhash.to_string())
 }
+#[query(hidden = true)]
+fn transform_blockhash(mut args: TransformArgs) -> TransformedHttpResponse {
+    log!(
+        INFO,
+        "[ic-solana-provider] transform_blockhash TransformArgs: {:?}",
+        args
+    );
 
+    args.response.headers.clear();
+    let block_hash_body = String::from_utf8(args.response.body.clone()).unwrap();
+    let json_response =
+        serde_json::from_str::<JsonRpcResponse<OptionalContext<RpcBlockhash>>>(&block_hash_body)
+            .unwrap();
+    log!(
+        INFO,
+        "[ic-solana-provider] transform_blockhash json_response : {:?}",
+        json_response
+    );
+    if let Some(e) = json_response.error {
+        log!(
+            INFO,
+            "[ic-solana-provider] transform_blockhash response error: {:?}",
+            e
+        );
+
+        return args.response;
+    }
+    if json_response.result.is_none() {
+        log!(
+            INFO,
+            "[ic-solana-provider] transform_blockhash json_response.result is none !",
+        );
+        return args.response;
+    }
+    let account_resp = json_response.result.unwrap();
+    let result = match account_resp {
+        OptionalContext::NoContext(value) => OptionalContext::NoContext(value),
+        OptionalContext::Context(mut ctx) => {
+            // reset slot to 0
+            ctx.context.slot = 0;
+            log!(
+                INFO,
+                "[ic-solana-provider] transform_blockhash reset slot to 0 : {:?}",
+                ctx
+            );
+            OptionalContext::Context(ctx)
+        }
+    };
+
+    let new_json_rpc_resp = JsonRpcResponse {
+        jsonrpc: json_response.jsonrpc,
+        result: Some(result),
+        error: json_response.error,
+        id: json_response.id,
+    };
+    let new_body = serde_json::to_string(&new_json_rpc_resp).unwrap();
+
+    let resp = TransformedHttpResponse {
+        status: args.response.status,
+        headers: vec![],
+        body: new_body.into_bytes(),
+    };
+    log!(
+        INFO,
+        "[ic-solana-provider] transform_blockhash transformed response: {:?}",
+        resp
+    );
+    resp
+}
 ///
 /// Returns all information associated with the account of provided Pubkey.
 ///
@@ -162,6 +230,68 @@ pub async fn sol_get_account_info(pubkey: String) -> RpcResult<Option<String>> {
         )
         .await?;
     Ok(account_info)
+}
+
+#[query(hidden = true)]
+fn transform_account(mut args: TransformArgs) -> TransformedHttpResponse {
+    log!(
+        INFO,
+        "[ic-solana-provider] transform_account TransformArgs: {:?}",
+        args
+    );
+    args.response.headers.clear();
+    let block_hash_body = String::from_utf8(args.response.body.clone()).unwrap();
+    let json_response =
+        serde_json::from_str::<JsonRpcResponse<Response<Option<UiAccount>>>>(&block_hash_body)
+            .unwrap();
+    log!(
+        INFO,
+        "[ic-solana-provider] transform_account json_response : {:?}",
+        json_response
+    );
+    if let Some(e) = json_response.error {
+        log!(
+            INFO,
+            "[ic-solana-provider] transform_account response error: {:?}",
+            e
+        );
+
+        return args.response;
+    }
+    if json_response.result.is_none() {
+        log!(
+            INFO,
+            "[ic-solana-provider] transform_account json_response.result is none !",
+        );
+        return args.response;
+    }
+    let mut account_resp = json_response.result.unwrap();
+    // reset slot to 0
+    account_resp.context.slot = 0;
+    log!(
+        INFO,
+        "[ic-solana-provider] transform_account reset slot to 0 : {:?}",
+        account_resp
+    );
+    let new_json_rpc_resp = JsonRpcResponse {
+        jsonrpc: json_response.jsonrpc,
+        result: Some(account_resp),
+        error: json_response.error,
+        id: json_response.id,
+    };
+    let new_body = serde_json::to_string(&new_json_rpc_resp).unwrap();
+
+    let resp = TransformedHttpResponse {
+        status: args.response.status,
+        headers: vec![],
+        body: new_body.into_bytes(),
+    };
+    log!(
+        INFO,
+        "[ic-solana-provider] transform_account transformed response: {:?}",
+        resp
+    );
+    resp
 }
 
 ///
@@ -203,6 +333,69 @@ pub async fn sol_get_signature_statuses(
         )
         .await?;
     Ok(response)
+}
+
+#[query(hidden = true)]
+fn transform_signature_statuses(mut args: TransformArgs) -> TransformedHttpResponse {
+    log!(
+        INFO,
+        "[ic-solana-provider] transform_signature_statuses TransformArgs: {:?}",
+        args
+    );
+    args.response.headers.clear();
+    let block_hash_body = String::from_utf8(args.response.body.clone()).unwrap();
+    let json_response = serde_json::from_str::<
+        JsonRpcResponse<Response<Option<Vec<TransactionStatus>>>>,
+    >(&block_hash_body)
+    .unwrap();
+    log!(
+        INFO,
+        "[ic-solana-provider] transform_signature_statuses json_response : {:?}",
+        json_response
+    );
+    if let Some(e) = json_response.error {
+        log!(
+            INFO,
+            "[ic-solana-provider] transform_signature_statuses response error: {:?}",
+            e
+        );
+
+        return args.response;
+    }
+    if json_response.result.is_none() {
+        log!(
+            INFO,
+            "[ic-solana-provider] transform_signature_statuses json_response.result is none !",
+        );
+        return args.response;
+    }
+    let mut account_resp = json_response.result.unwrap();
+    // reset slot to 0
+    account_resp.context.slot = 0;
+    log!(
+        INFO,
+        "[ic-solana-provider] transform_signature_statuses reset slot to 0 : {:?}",
+        account_resp
+    );
+    let new_json_rpc_resp = JsonRpcResponse {
+        jsonrpc: json_response.jsonrpc,
+        result: Some(account_resp),
+        error: json_response.error,
+        id: json_response.id,
+    };
+    let new_body = serde_json::to_string(&new_json_rpc_resp).unwrap();
+
+    let resp = TransformedHttpResponse {
+        status: args.response.status,
+        headers: vec![],
+        body: new_body.into_bytes(),
+    };
+    log!(
+        INFO,
+        "[ic-solana-provider] transform_signature_statuses transformed response: {:?}",
+        resp
+    );
+    resp
 }
 
 ///
@@ -309,42 +502,6 @@ fn transform_tx_response(mut args: TransformArgs) -> TransformedHttpResponse {
         args.response
     );
     args.response
-}
-
-#[query(hidden = true)]
-fn transform_blockhash(mut args: TransformArgs) -> TransformedHttpResponse {
-    log!(
-        INFO,
-        "[ic-solana-provider] transform_blockhash TransformArgs: {:?}",
-        args
-    );
-    args.response.headers.clear();
-    args.response
-    // let block_hash_body = String::from_utf8(args.response.body.clone()).unwrap();
-    // let json_response =
-    //     serde_json::from_str::<JsonRpcResponse<OptionalContext<RpcBlockhash>>>(&block_hash_body)
-    //         .unwrap();
-    // log!(
-    //     INFO,
-    //     "[ic-solana-provider] transform_blockhash json_response : {:?}",
-    //     json_response
-    // );
-    // if let Some(e) = json_response.error {
-    //     log!(
-    //         ERROR,
-    //         "[ic-solana-provider] transform_blockhash response error: {:?}",
-    //         e
-    //     );
-    //     args.response.headers.clear();
-    //     args.response
-    // } else {
-    //     args.response.headers.clear();
-    //     TransformedHttpResponse {
-    //         status: args.response.status,
-    //         headers: vec![],
-    //         body: args.response.body,
-    //     }
-    // }
 }
 
 #[query]

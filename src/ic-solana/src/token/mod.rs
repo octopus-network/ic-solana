@@ -25,6 +25,7 @@ pub mod token_metadata;
 
 #[derive(CandidType, Deserialize, Serialize, Clone, Debug, PartialEq, Eq)]
 pub struct TokenInfo {
+    pub token_id: String,
     pub name: String,
     pub symbol: String,
     pub decimals: u8,
@@ -453,22 +454,22 @@ impl SolanaClient {
         )
         .await;
         log!(INFO, "sol_sendRawTransaction response: {:?}", response);
-        // let resp = response
-        //     .map_err(|e| {
-        //         anyhow!(format!(
-        //             "[solana_client::send_raw_transaction] call send raw transaction err: {:?}",
-        //             e
-        //         ))
-        //     })?
-        //     .0
-        //     .map_err(|e| {
-        //         anyhow!(format!(
-        //             "[solana_client::send_raw_transaction] rpc error: {:?}",
-        //             e
-        //         ))
-        //     })?;
-        // log!(INFO, "sol_sendRawTransaction response: {}", resp);
+        let resp = response
+            .map_err(|e| {
+                anyhow!(format!(
+                    "[solana_client::send_raw_transaction] call send raw transaction err: {:?}",
+                    e
+                ))
+            })?
+            .0
+            .map_err(|e| {
+                anyhow!(format!(
+                    "[solana_client::send_raw_transaction] rpc error: {:?}",
+                    e
+                ))
+            })?;
+        log!(INFO, "sol_sendRawTransaction response: {}", resp);
 
-        Ok(tx_signature.to_string())
+        Ok(resp)
     }
 }
