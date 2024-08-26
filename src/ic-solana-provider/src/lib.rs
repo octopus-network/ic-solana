@@ -10,7 +10,7 @@ use ic_cdk::api::management_canister::http_request::{
 };
 use ic_cdk::{query, update};
 use ic_solana::http_request_required_cycles;
-use ic_solana::logs::{DEBUG, ERROR, INFO};
+use ic_solana::logs::DEBUG;
 use ic_solana::response::{OptionalContext, Response, RpcBlockhash};
 use ic_solana::rpc_client::{JsonRpcResponse, RpcResult};
 use ic_solana::types::{
@@ -20,7 +20,7 @@ use ic_solana::types::{
     UiTransactionEncoding,
 };
 use ic_stable_structures::writer::Writer;
-use ic_stable_structures::{Memory, Storable};
+use ic_stable_structures::Memory;
 // use migration::{migrate, PreState};
 use candid::Nat;
 use serde_bytes::ByteBuf;
@@ -144,7 +144,7 @@ pub async fn sol_get_latest_blockhash() -> RpcResult<String> {
 #[query(hidden = true)]
 fn transform_blockhash(mut args: TransformArgs) -> TransformedHttpResponse {
     log!(
-        INFO,
+        DEBUG,
         "[ic-solana-provider] transform_blockhash TransformArgs: {:?}",
         args
     );
@@ -155,13 +155,13 @@ fn transform_blockhash(mut args: TransformArgs) -> TransformedHttpResponse {
         serde_json::from_str::<JsonRpcResponse<OptionalContext<RpcBlockhash>>>(&block_hash_body)
             .unwrap();
     log!(
-        INFO,
+        DEBUG,
         "[ic-solana-provider] transform_blockhash json_response : {:?}",
         json_response
     );
     if let Some(e) = json_response.error {
         log!(
-            INFO,
+            DEBUG,
             "[ic-solana-provider] transform_blockhash response error: {:?}",
             e
         );
@@ -170,7 +170,7 @@ fn transform_blockhash(mut args: TransformArgs) -> TransformedHttpResponse {
     }
     if json_response.result.is_none() {
         log!(
-            INFO,
+            DEBUG,
             "[ic-solana-provider] transform_blockhash json_response.result is none !",
         );
         return args.response;
@@ -182,7 +182,7 @@ fn transform_blockhash(mut args: TransformArgs) -> TransformedHttpResponse {
             // reset slot to 0
             ctx.context.slot = 0;
             log!(
-                INFO,
+                DEBUG,
                 "[ic-solana-provider] transform_blockhash reset slot to 0 : {:?}",
                 ctx
             );
@@ -204,7 +204,7 @@ fn transform_blockhash(mut args: TransformArgs) -> TransformedHttpResponse {
         body: new_body.into_bytes(),
     };
     log!(
-        INFO,
+        DEBUG,
         "[ic-solana-provider] transform_blockhash transformed response: {:?}",
         resp
     );
@@ -235,7 +235,7 @@ pub async fn sol_get_account_info(pubkey: String) -> RpcResult<Option<String>> {
 #[query(hidden = true)]
 fn transform_account(mut args: TransformArgs) -> TransformedHttpResponse {
     log!(
-        INFO,
+        DEBUG,
         "[ic-solana-provider] transform_account TransformArgs: {:?}",
         args
     );
@@ -245,13 +245,13 @@ fn transform_account(mut args: TransformArgs) -> TransformedHttpResponse {
         serde_json::from_str::<JsonRpcResponse<Response<Option<UiAccount>>>>(&block_hash_body)
             .unwrap();
     log!(
-        INFO,
+        DEBUG,
         "[ic-solana-provider] transform_account json_response : {:?}",
         json_response
     );
     if let Some(e) = json_response.error {
         log!(
-            INFO,
+            DEBUG,
             "[ic-solana-provider] transform_account response error: {:?}",
             e
         );
@@ -260,7 +260,7 @@ fn transform_account(mut args: TransformArgs) -> TransformedHttpResponse {
     }
     if json_response.result.is_none() {
         log!(
-            INFO,
+            DEBUG,
             "[ic-solana-provider] transform_account json_response.result is none !",
         );
         return args.response;
@@ -269,7 +269,7 @@ fn transform_account(mut args: TransformArgs) -> TransformedHttpResponse {
     // reset slot to 0
     account_resp.context.slot = 0;
     log!(
-        INFO,
+        DEBUG,
         "[ic-solana-provider] transform_account reset slot to 0 : {:?}",
         account_resp
     );
@@ -287,7 +287,7 @@ fn transform_account(mut args: TransformArgs) -> TransformedHttpResponse {
         body: new_body.into_bytes(),
     };
     log!(
-        INFO,
+        DEBUG,
         "[ic-solana-provider] transform_account transformed response: {:?}",
         resp
     );
@@ -338,7 +338,7 @@ pub async fn sol_get_signature_statuses(
 #[query(hidden = true)]
 fn transform_signature_statuses(mut args: TransformArgs) -> TransformedHttpResponse {
     log!(
-        INFO,
+        DEBUG,
         "[ic-solana-provider] transform_signature_statuses TransformArgs: {:?}",
         args
     );
@@ -349,13 +349,13 @@ fn transform_signature_statuses(mut args: TransformArgs) -> TransformedHttpRespo
     >(&block_hash_body)
     .unwrap();
     log!(
-        INFO,
+        DEBUG,
         "[ic-solana-provider] transform_signature_statuses json_response : {:?}",
         json_response
     );
     if let Some(e) = json_response.error {
         log!(
-            INFO,
+            DEBUG,
             "[ic-solana-provider] transform_signature_statuses response error: {:?}",
             e
         );
@@ -364,7 +364,7 @@ fn transform_signature_statuses(mut args: TransformArgs) -> TransformedHttpRespo
     }
     if json_response.result.is_none() {
         log!(
-            INFO,
+            DEBUG,
             "[ic-solana-provider] transform_signature_statuses json_response.result is none !",
         );
         return args.response;
@@ -373,7 +373,7 @@ fn transform_signature_statuses(mut args: TransformArgs) -> TransformedHttpRespo
     // reset slot to 0
     account_resp.context.slot = 0;
     log!(
-        INFO,
+        DEBUG,
         "[ic-solana-provider] transform_signature_statuses reset slot to 0 : {:?}",
         account_resp
     );
@@ -391,7 +391,7 @@ fn transform_signature_statuses(mut args: TransformArgs) -> TransformedHttpRespo
         body: new_body.into_bytes(),
     };
     log!(
-        INFO,
+        DEBUG,
         "[ic-solana-provider] transform_signature_statuses transformed response: {:?}",
         resp
     );
@@ -448,7 +448,7 @@ pub async fn sol_send_transaction(req: SendTransactionRequest) -> RpcResult<Stri
 #[update(name = "sol_sendRawTransaction")]
 pub async fn send_raw_transaction(raw_signed_transaction: String) -> RpcResult<String> {
     log!(
-        INFO,
+        DEBUG,
         "[ic-solana-provider] send_raw_transaction raw_signed_transaction: {:?}",
         raw_signed_transaction
     );
@@ -477,7 +477,7 @@ fn cleanup_response(mut args: TransformArgs) -> TransformedHttpResponse {
     // Clear non-deterministic fields from the response headers.
 
     log!(
-        INFO,
+        DEBUG,
         "[ic-solana-provider] cleanup_response TransformArgs: {:?}",
         args
     );
@@ -488,7 +488,7 @@ fn cleanup_response(mut args: TransformArgs) -> TransformedHttpResponse {
 #[query(hidden = true)]
 fn transform_tx_response(mut args: TransformArgs) -> TransformedHttpResponse {
     log!(
-        INFO,
+        DEBUG,
         "[ic-solana-provider] transform_tx_response TransformArgs: {:?}",
         args
     );
@@ -497,7 +497,7 @@ fn transform_tx_response(mut args: TransformArgs) -> TransformedHttpResponse {
     args.response.body = args.context;
 
     log!(
-        INFO,
+        DEBUG,
         "[ic-solana-provider] transform_tx_response transformed response: {:?}",
         args.response
     );
@@ -537,16 +537,10 @@ fn http_request(req: HttpRequest) -> HttpResponse {
         };
 
         let mut entries = vec![];
-        for entry in export_logs(&ic_solana::logs::INFO_BUF) {
-            entries.push(entry);
-        }
-        for entry in export_logs(&ic_solana::logs::DEBUG_BUF) {
-            entries.push(entry);
-        }
         for entry in export_logs(&ic_solana::logs::ERROR_BUF) {
             entries.push(entry);
         }
-        for entry in export_logs(&ic_solana::logs::TRACE_HTTP_BUF) {
+        for entry in export_logs(&ic_solana::logs::DEBUG_BUF) {
             entries.push(entry);
         }
         entries.retain(|entry| entry.timestamp >= max_skip_timestamp);

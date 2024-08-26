@@ -4,7 +4,7 @@ use crate::rpc_client::RpcResult;
 
 use crate::token::constants::token22_program_id;
 
-use crate::logs::INFO;
+use crate::logs::DEBUG;
 use crate::token::token_metadata::{OptionalNonZeroPubkey, TokenMetadata};
 use crate::types::{AccountMeta, BlockHash, Instruction, Message, Pubkey, Signature, Transaction};
 use anyhow::anyhow;
@@ -89,7 +89,7 @@ impl SolanaClient {
                 ))
             })?;
         log!(
-            INFO,
+            DEBUG,
             "[solana_client::get_account_info] sol_getAccountInfo resp: {:#?} ",
             resp
         );
@@ -158,7 +158,7 @@ impl SolanaClient {
             additional_metadata: vec![],
         };
         log!(
-            INFO,
+            DEBUG,
             "[solana_client::create_mint_with_metadata] metadata: {:#?} ",
             metadata
         );
@@ -176,7 +176,7 @@ impl SolanaClient {
             .map_err(|e| anyhow!(format!("query rent rpc error: {:?}", e)))?;
 
         log!(
-            INFO,
+            DEBUG,
             "[solana_client::create_mint_with_metadata] payer: {:?} ",
             self.payer.to_string()
         );
@@ -258,7 +258,7 @@ impl SolanaClient {
             ),
         ];
         log!(
-            INFO,
+            DEBUG,
             "[solana_client::create_associated_token_account] instructions :{:?} ",
             instructions
         );
@@ -288,7 +288,7 @@ impl SolanaClient {
         )
         .unwrap()];
         log!(
-            INFO,
+            DEBUG,
             "[solana_client::mint_to] instructions: {:?} ",
             instructions
         );
@@ -418,7 +418,7 @@ impl SolanaClient {
     ) -> anyhow::Result<String> {
         let blockhash = self.get_latest_blockhash().await?;
         log!(
-            INFO,
+            DEBUG,
             "[solana_client::send_raw_transaction] get_latest_blockhash : {:?}",
             blockhash
         );
@@ -435,14 +435,14 @@ impl SolanaClient {
         }
 
         log!(
-            INFO,
+            DEBUG,
             "[solana_client::send_raw_transaction] signed_tx : {:?} and string : {:?}",
             tx,
             tx.to_string()
         );
         let tx_signature = tx.signatures[0].clone();
         log!(
-            INFO,
+            DEBUG,
             "[solana_client::send_raw_transaction] tx signature : {:?}",
             tx_signature.to_string()
         );
@@ -453,7 +453,7 @@ impl SolanaClient {
             (tx.to_string(),),
         )
         .await;
-        log!(INFO, "sol_sendRawTransaction response: {:?}", response);
+        log!(DEBUG, "sol_sendRawTransaction response: {:?}", response);
         let resp = response
             .map_err(|e| {
                 anyhow!(format!(
@@ -468,7 +468,7 @@ impl SolanaClient {
                     e
                 ))
             })?;
-        log!(INFO, "sol_sendRawTransaction response: {}", resp);
+        log!(DEBUG, "sol_sendRawTransaction response: {}", resp);
 
         Ok(resp)
     }

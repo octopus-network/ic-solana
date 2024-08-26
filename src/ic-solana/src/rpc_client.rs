@@ -1,5 +1,5 @@
 use crate::constants::*;
-use crate::logs::{DEBUG, INFO, TRACE_HTTP};
+use crate::logs::DEBUG;
 use crate::request::RpcRequest;
 use crate::response::{
     EncodedConfirmedBlock, OptionalContext, Response, RpcBlockhash,
@@ -168,7 +168,7 @@ impl RpcClient {
         match http_request(request, cycles).await {
             Ok((response,)) => {
                 log!(
-                    TRACE_HTTP,
+                    DEBUG,
                     "Got response (with {} bytes): {} from url: {} with status: {}",
                     response.body.len(),
                     String::from_utf8_lossy(&response.body),
@@ -340,7 +340,7 @@ impl RpcClient {
             serde_json::from_str::<JsonRpcResponse<Response<Option<UiAccount>>>>(&response)?;
 
         log!(
-            INFO,
+            DEBUG,
             "[rpc_client] get_account_info1 json_response : {:?}",
             json_response
         );
