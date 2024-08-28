@@ -594,10 +594,20 @@ impl RpcClient {
             TransformContext::from_name("transform_signature_statuses".to_owned(), vec![]);
 
         let response = self.call(&payload, 128, Some(transform)).await?;
-
+        log!(
+            DEBUG,
+            "[ic-solana] get_signature_statuses response: {:?}",
+            response
+        );
         let json_response = serde_json::from_str::<
             JsonRpcResponse<Response<Option<Vec<TransactionStatus>>>>,
         >(&response)?;
+
+        log!(
+            DEBUG,
+            "[ic-solana] get_signature_statuses json_response: {:?}",
+            json_response
+        );
 
         if let Some(e) = json_response.error {
             return Err(e.into());

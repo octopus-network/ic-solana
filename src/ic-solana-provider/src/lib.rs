@@ -314,9 +314,7 @@ pub async fn sol_get_transaction(signature: String) -> RpcResult<String> {
 /// Returns the statuses of a list of transaction signatures.
 ///
 #[update(name = "sol_getSignatureStatuses")]
-pub async fn sol_get_signature_statuses(
-    signatures: Vec<String>,
-) -> RpcResult<Vec<TransactionStatus>> {
+pub async fn sol_get_signature_statuses(signatures: Vec<String>) -> RpcResult<String> {
     let client = rpc_client();
 
     let signatures = signatures
@@ -332,7 +330,18 @@ pub async fn sol_get_signature_statuses(
             },
         )
         .await?;
-    Ok(response)
+    log!(
+        DEBUG,
+        "[ic-solana-provider] sol_get_signature_statuses response: {:?}",
+        response
+    );
+    let response_str = serde_json::to_string(&response).unwrap();
+    log!(
+        DEBUG,
+        "[ic-solana-provider] sol_get_signature_statuses response_str: {:?}",
+        response_str
+    );
+    Ok(response_str)
 }
 
 #[query(hidden = true)]
