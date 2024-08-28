@@ -339,11 +339,6 @@ impl RpcClient {
         let json_response =
             serde_json::from_str::<JsonRpcResponse<Response<Option<UiAccount>>>>(&response)?;
 
-        log!(
-            DEBUG,
-            "[rpc_client] get_account_info1 json_response : {:?}",
-            json_response
-        );
         if let Some(e) = json_response.error {
             return Err(e.into());
         }
