@@ -219,7 +219,7 @@ impl SolanaClient {
                 instructions.as_slice(),
                 vec![
                     self.payer_derive_path.clone(),
-                    vec![ByteBuf::from(token_info.name.clone())],
+                    vec![ByteBuf::from(token_info.token_id.clone())],
                 ],
             )
             .await?;
@@ -439,12 +439,6 @@ impl SolanaClient {
             "[solana_client::send_raw_transaction] signed_tx : {:?} and string : {:?}",
             tx,
             tx.to_string()
-        );
-        let tx_signature = tx.signatures[0].clone();
-        log!(
-            DEBUG,
-            "[solana_client::send_raw_transaction] tx signature : {:?}",
-            tx_signature.to_string()
         );
 
         let response: Result<(RpcResult<String>,), _> = ic_cdk::call(
