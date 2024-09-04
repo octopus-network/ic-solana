@@ -26,6 +26,7 @@ use ic_cdk::api::management_canister::http_request::{
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::{json, Value};
+use sha2::Digest;
 use std::cell::RefCell;
 use std::str::FromStr;
 
@@ -81,6 +82,13 @@ impl From<serde_json::Error> for RpcError {
 }
 
 pub type RpcResult<T> = Result<T, RpcError>;
+
+fn idempotency_key(input: &str) -> String {
+    let mut hasher = sha2::Sha256::new();
+    hasher.update(input);
+    let value = hasher.finalize().to_vec();
+    hex::encode(value)
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RpcClient {
@@ -140,14 +148,29 @@ impl RpcClient {
             "cleanup_response".to_owned(),
             vec![],
         ));
+
+        let mut headers = vec![HttpHeader {
+            name: "Content-Type".to_string(),
+            value: "application/json".to_string(),
+        }];
+        // add idempotency_key
+        let idempotency_key = idempotency_key(payload);
+
+        headers.push(HttpHeader {
+            name: "X-Idempotency".to_string(),
+            value: idempotency_key,
+        });
+        log!(
+            DEBUG,
+            "ic-solana::rpc_client::call: http header: {:?}",
+            headers
+        );
+
         let request = CanisterHttpRequestArgument {
             url: self.cluster.url().to_string(),
             max_response_bytes: Some(max_response_bytes + HEADER_SIZE_LIMIT),
             method: HttpMethod::POST,
-            headers: vec![HttpHeader {
-                name: "Content-Type".to_string(),
-                value: "application/json".to_string(),
-            }],
+            headers: headers,
             body: Some(payload.as_bytes().to_vec()),
             transform: Some(transform),
         };
@@ -666,7 +689,7 @@ impl RpcClient {
             .to_string();
 
         let response = self
-            .call(&payload, TRANSACTION_RESPONSE_SIZE_ESTIMATE, None)
+            .call(&payload, TX_MEMO_RESP_SIZE_ESTIMATE, None)
             .await?;
 
         // let json_response = serde_json::from_str::<

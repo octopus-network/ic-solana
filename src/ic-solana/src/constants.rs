@@ -35,6 +35,9 @@ pub const SIGNATURE_RESPONSE_SIZE_ESTIMATE: u64 = 500;
 /// In case no memo is set transaction object should be around 1100 bytes long.
 pub const TRANSACTION_RESPONSE_SIZE_ESTIMATE: u64 = 2200;
 
+/// a tx includes tansfer + burn+ memo  should be around 5000 bytes long.
+pub const TX_MEMO_RESP_SIZE_ESTIMATE: u64 = 5000;
+
 pub const GET_BLOCK_RESPONSE_SIZE_ESTIMATE: u64 = 516_000;
 pub const GET_SUPPLY_SIZE_ESTIMATE: u64 = 1024;
 pub const GET_EPOCH_INFO_SIZE_ESTIMATE: u64 = 56;

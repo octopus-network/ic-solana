@@ -36,3 +36,5 @@ k256 = { git = "https://github.com/altkdf/elliptic-curves", branch = "schnorr_ca
 ] }
 ed25519-dalek = "2.1"
 ic-management-canister-types = { workspace = true }
+
+# uuid = { workspace = true }

@@ -462,7 +462,7 @@ impl SolanaClient {
                     e
                 ))
             })?;
-        log!(DEBUG, "sol_sendRawTransaction response: {}", resp);
+        // log!(DEBUG, "sol_sendRawTransaction response: {}", resp);
 
         Ok(resp)
     }
