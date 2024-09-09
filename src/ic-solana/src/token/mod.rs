@@ -175,11 +175,11 @@ impl SolanaClient {
             .0
             .map_err(|e| anyhow!(format!("query rent rpc error: {:?}", e)))?;
 
-        log!(
-            DEBUG,
-            "[solana_client::create_mint_with_metadata] payer: {:?} ",
-            self.payer.to_string()
-        );
+        // log!(
+        //     DEBUG,
+        //     "[solana_client::create_mint_with_metadata] payer: {:?} ",
+        //     self.payer.to_string()
+        // );
 
         let mut instructions = vec![system_instruction::create_account(
             &self.payer,
