@@ -62,7 +62,7 @@ pub async fn request(method: String, params: String, max_response_bytes: u64) ->
         "method": &method,
         "params": parsed_params
     }))?;
-    client.call(&payload, max_response_bytes, None).await
+    client.call(None, &payload, max_response_bytes, None).await
 }
 
 ///
@@ -298,12 +298,13 @@ fn transform_account(mut args: TransformArgs) -> TransformedHttpResponse {
 /// Returns transaction details for a confirmed transaction.
 ///
 #[update(name = "sol_getTransaction")]
-pub async fn sol_get_transaction(signature: String) -> RpcResult<String> {
+pub async fn sol_get_transaction(signature: String, forward: Option<String>) -> RpcResult<String> {
     let client = rpc_client();
     let signature = Signature::from_str(&signature).expect("Invalid signature");
     let response = client
         .get_transaction1(
             &signature,
+            forward,
             RpcTransactionConfig::new_with_encoding(&Some(UiTransactionEncoding::JsonParsed)),
         )
         .await?;

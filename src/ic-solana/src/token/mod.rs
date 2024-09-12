@@ -50,9 +50,17 @@ impl SolanaClient {
         Pubkey::try_from(eddsa_public_key(schnorr_canister, chainkey_name, path).await).unwrap()
     }
 
-    pub async fn query_transaction(&self, txhash: String) -> anyhow::Result<String> {
-        let response: Result<(RpcResult<String>,), _> =
-            ic_cdk::call(self.sol_canister_id, "sol_getTransaction", (txhash,)).await;
+    pub async fn query_transaction(
+        &self,
+        txhash: String,
+        forward: Option<String>,
+    ) -> anyhow::Result<String> {
+        let response: Result<(RpcResult<String>,), _> = ic_cdk::call(
+            self.sol_canister_id,
+            "sol_getTransaction",
+            (txhash, forward),
+        )
+        .await;
         let tx = response
             .map_err(|e| anyhow!(format!("query transaction err: {:?}", e)))?
             .0
