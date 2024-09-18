@@ -57,7 +57,7 @@ async fn query_transaction(payer: String, tx_hash: String) -> String {
         chainkey_name: "test_key_1".to_string(),
         schnorr_canister: schnorr_canister(),
     };
-    let r = s.query_transaction(tx_hash).await.unwrap();
+    let r = s.query_transaction(tx_hash, None).await.unwrap();
     r
 }
 
