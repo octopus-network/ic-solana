@@ -4,16 +4,20 @@
 // pub const INGRESS_OVERHEAD_BYTES: u128 = 100;
 // pub const INGRESS_MESSAGE_RECEIVED_COST: u128 = 1_200_000;
 // pub const INGRESS_MESSAGE_BYTE_RECEIVED_COST: u128 = 2_000;
+pub const INGRESS_OVERHEAD_BYTES: u128 = 100;
+pub const INGRESS_MESSAGE_RECEIVED_COST: u128 = 1_200_000;
+pub const INGRESS_MESSAGE_BYTE_RECEIVED_COST: u128 = 2_000;
+
 pub const HTTP_OUTCALL_REQUEST_BASE_COST: u128 = 3_000_000;
 pub const HTTP_OUTCALL_REQUEST_PER_NODE_COST: u128 = 60_000;
 pub const HTTP_OUTCALL_REQUEST_COST_PER_BYTE: u128 = 400;
 pub const HTTP_OUTCALL_RESPONSE_COST_PER_BYTE: u128 = 800;
 
 // /// Minimum number of bytes charged for a URL; improves consistency of costs between providers
-// pub const RPC_URL_MIN_COST_BYTES: u32 = 256;
+pub const RPC_URL_COST_BYTES: u32 = 256;
 
 // /// Additional cost of operating the canister per subnet node
-// pub const CANISTER_OVERHEAD: u128 = 1_000_000;
+pub const CANISTER_OVERHEAD: u128 = 1_000_000;
 
 /// This constant is our approximation of the expected header size.
 /// The HTTP standard doesn't define any limit, and many implementations limit
@@ -41,3 +45,5 @@ pub const TX_MEMO_RESP_SIZE_ESTIMATE: u64 = 5000;
 pub const GET_BLOCK_RESPONSE_SIZE_ESTIMATE: u64 = 516_000;
 pub const GET_SUPPLY_SIZE_ESTIMATE: u64 = 1024;
 pub const GET_EPOCH_INFO_SIZE_ESTIMATE: u64 = 56;
+
+pub const NODES_IN_SUBNET: u32 = 28;

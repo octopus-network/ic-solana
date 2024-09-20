@@ -16,6 +16,7 @@ bs58 = "0.5.1"
 candid = { workspace = true }
 getrandom = { version = "0.2", features = ["custom"] }
 ic-canister-log = { workspace = true }
+ic-canisters-http-types = { workspace = true }
 ic-cdk = { workspace = true }
 ic-crypto-ed25519 = { workspace = true }
 serde = { workspace = true }
@@ -36,5 +37,6 @@ k256 = { git = "https://github.com/altkdf/elliptic-curves", branch = "schnorr_ca
 ] }
 ed25519-dalek = "2.1"
 ic-management-canister-types = { workspace = true }
-
+time = "0.3.36"
+serde_derive = "1.0.208"
 # uuid = { workspace = true }

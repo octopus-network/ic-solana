@@ -9,8 +9,8 @@ use ic_cdk::api::management_canister::http_request::{
     TransformArgs,
 };
 use ic_cdk::{query, update};
-use ic_solana::http_request_required_cycles;
-use ic_solana::logs::DEBUG;
+use ic_solana::{http_request_required_cycles, ic_log};
+use ic_solana::ic_log::DEBUG;
 use ic_solana::response::{OptionalContext, Response, RpcBlockhash};
 use ic_solana::rpc_client::{JsonRpcResponse, RpcResult};
 use ic_solana::types::{
@@ -529,38 +529,7 @@ fn http_request(req: HttpRequest) -> HttpResponse {
     if ic_cdk::api::data_certificate().is_none() {
         ic_cdk::trap("update call rejected");
     }
-
-    if req.path() == "/logs" {
-        use serde_json;
-        use std::str::FromStr;
-
-        let max_skip_timestamp = match req.raw_query_param("time") {
-            Some(arg) => match u64::from_str(arg) {
-                Ok(value) => value,
-                Err(_) => {
-                    return HttpResponseBuilder::bad_request()
-                        .with_body_and_content_length("failed to parse the 'time' parameter")
-                        .build()
-                }
-            },
-            None => 0,
-        };
-
-        let mut entries = vec![];
-        for entry in export_logs(&ic_solana::logs::ERROR_BUF) {
-            entries.push(entry);
-        }
-        for entry in export_logs(&ic_solana::logs::DEBUG_BUF) {
-            entries.push(entry);
-        }
-        entries.retain(|entry| entry.timestamp >= max_skip_timestamp);
-        HttpResponseBuilder::ok()
-            .header("Content-Type", "application/json; charset=utf-8")
-            .with_body_and_content_length(serde_json::to_string(&entries).unwrap_or_default())
-            .build()
-    } else {
-        HttpResponseBuilder::not_found().build()
-    }
+    ic_log::http_request(req)
 }
 
 #[ic_cdk::init]

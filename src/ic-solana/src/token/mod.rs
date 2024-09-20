@@ -4,7 +4,7 @@ use crate::rpc_client::RpcResult;
 
 use crate::token::constants::token22_program_id;
 
-use crate::logs::DEBUG;
+use crate::ic_log::DEBUG;
 use crate::token::token_metadata::{OptionalNonZeroPubkey, TokenMetadata};
 use crate::types::{AccountMeta, BlockHash, Instruction, Message, Pubkey, Signature, Transaction};
 use anyhow::anyhow;

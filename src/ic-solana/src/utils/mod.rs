@@ -56,3 +56,17 @@ pub fn http_request_required_cycles(
     //     + CANISTER_OVERHEAD;
     // cost_per_node * (nodes_in_subnet as u128)
 }
+
+pub fn get_http_request_cost(payload_size_bytes: u64, max_response_bytes: u64) -> u128 {
+    let nodes_in_subnet = NODES_IN_SUBNET as u128;
+    let ingress_bytes =
+        payload_size_bytes as u128 + RPC_URL_COST_BYTES as u128 + INGRESS_OVERHEAD_BYTES;
+    let cost_per_node = INGRESS_MESSAGE_RECEIVED_COST
+        + INGRESS_MESSAGE_BYTE_RECEIVED_COST * ingress_bytes
+        + HTTP_OUTCALL_REQUEST_BASE_COST
+        + HTTP_OUTCALL_REQUEST_PER_NODE_COST * nodes_in_subnet
+        + HTTP_OUTCALL_REQUEST_COST_PER_BYTE * payload_size_bytes as u128
+        + HTTP_OUTCALL_RESPONSE_COST_PER_BYTE * max_response_bytes as u128
+        + CANISTER_OVERHEAD;
+    cost_per_node * nodes_in_subnet
+}

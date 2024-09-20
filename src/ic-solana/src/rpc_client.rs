@@ -1,5 +1,5 @@
 use crate::constants::*;
-use crate::logs::DEBUG;
+use crate::ic_log::DEBUG;
 use crate::request::RpcRequest;
 use crate::response::{
     EncodedConfirmedBlock, OptionalContext, Response, RpcBlockhash,
@@ -14,7 +14,7 @@ use crate::types::{
     RpcSignaturesForAddressConfig, RpcSupplyConfig, Signature, Transaction, TransactionStatus,
     UiTransactionEncoding,
 };
-use crate::utils::http_request_required_cycles;
+use crate::utils::get_http_request_cost;
 use anyhow::Result;
 use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
@@ -34,13 +34,13 @@ thread_local! {
     static NEXT_ID: RefCell<u64> = RefCell::default();
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct JsonRpcError {
     pub code: i64,
     pub message: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct JsonRpcResponse<T> {
     pub jsonrpc: String,
     pub result: Option<T>,
@@ -177,6 +177,7 @@ impl RpcClient {
         let request = CanisterHttpRequestArgument {
             url: self.cluster.url().to_string(),
             max_response_bytes: Some(max_response_bytes + HEADER_SIZE_LIMIT),
+            // max_response_bytes: None,
             method: HttpMethod::POST,
             headers: headers,
             body: Some(payload.as_bytes().to_vec()),
@@ -184,11 +185,16 @@ impl RpcClient {
         };
 
         let url = self.cluster.url();
-        let nodes_in_standard_subnet = 13;
+        // let nodes_in_standard_subnet = 13;
 
-        let cycles = http_request_required_cycles(
-            &request,
-            self.nodes_in_subnet.unwrap_or(nodes_in_standard_subnet),
+        // let cycles = http_request_required_cycles(
+        //     &request,
+        //     self.nodes_in_subnet.unwrap_or(nodes_in_standard_subnet),
+        // );
+
+        let cycles = get_http_request_cost(
+            request.body.as_ref().map_or(0, |b| b.len() as u64),
+            request.max_response_bytes.unwrap_or(2 * 1024 * 1024), // default 2Mb
         );
 
         log!(
@@ -236,7 +242,7 @@ impl RpcClient {
             .build_request_json(self.next_request_id(), json!([config]))
             .to_string();
         let transform = TransformContext::from_name("transform_blockhash".to_owned(), vec![]);
-        let response = self.call(None,&payload, 156, Some(transform)).await?;
+        let response = self.call(None, &payload, 156, Some(transform)).await?;
 
         let json_response =
             serde_json::from_str::<JsonRpcResponse<OptionalContext<RpcBlockhash>>>(&response)?;
@@ -268,7 +274,7 @@ impl RpcClient {
             .build_request_json(self.next_request_id(), json!([pubkey.to_string(), config]))
             .to_string();
 
-        let response = self.call(None,&payload, 156, None).await?;
+        let response = self.call(None, &payload, 156, None).await?;
 
         let json_response =
             serde_json::from_str::<JsonRpcResponse<OptionalContext<u64>>>(&response)?;
@@ -298,7 +304,7 @@ impl RpcClient {
             )
             .to_string();
 
-        let response = self.call(None,&payload, 256, None).await?;
+        let response = self.call(None, &payload, 256, None).await?;
 
         let json_response =
             serde_json::from_str::<JsonRpcResponse<OptionalContext<UiTokenAmount>>>(&response)?;
@@ -327,7 +333,8 @@ impl RpcClient {
             .to_string();
 
         let response = self
-            .call(None,
+            .call(
+                None,
                 &payload,
                 max_response_bytes.unwrap_or(MAX_PDA_ACCOUNT_DATA_LENGTH),
                 None,
@@ -360,7 +367,8 @@ impl RpcClient {
 
         let transform = TransformContext::from_name("transform_account".to_owned(), vec![]);
         let response = self
-            .call(None,
+            .call(
+                None,
                 &payload,
                 max_response_bytes.unwrap_or(MAX_PDA_ACCOUNT_DATA_LENGTH),
                 Some(transform),
@@ -393,7 +401,7 @@ impl RpcClient {
             .build_request_json(self.next_request_id(), Value::Null)
             .to_string();
 
-        let response = self.call(None,&payload, 128, None).await?;
+        let response = self.call(None, &payload, 128, None).await?;
 
         let json_response = serde_json::from_str::<JsonRpcResponse<RpcVersionInfo>>(&response)?;
 
@@ -413,7 +421,7 @@ impl RpcClient {
             .build_request_json(self.next_request_id(), Value::Null)
             .to_string();
 
-        let response = self.call(None,&payload, 256, None).await?;
+        let response = self.call(None, &payload, 256, None).await?;
 
         let json_response = serde_json::from_str::<JsonRpcResponse<String>>(&response)?;
 
@@ -437,7 +445,7 @@ impl RpcClient {
             .to_string();
 
         let response = self
-            .call(None,&payload, GET_BLOCK_RESPONSE_SIZE_ESTIMATE, None)
+            .call(None, &payload, GET_BLOCK_RESPONSE_SIZE_ESTIMATE, None)
             .await?;
 
         let json_response =
@@ -458,7 +466,7 @@ impl RpcClient {
             .build_request_json(self.next_request_id(), Value::Null)
             .to_string();
 
-        let response = self.call(None,&payload, 128, None).await?;
+        let response = self.call(None, &payload, 128, None).await?;
 
         let json_response = serde_json::from_str::<JsonRpcResponse<Slot>>(&response)?;
 
@@ -477,7 +485,9 @@ impl RpcClient {
             .build_request_json(self.next_request_id(), json!([config]))
             .to_string();
 
-        let response = self.call(None,&payload, GET_SUPPLY_SIZE_ESTIMATE, None).await?;
+        let response = self
+            .call(None, &payload, GET_SUPPLY_SIZE_ESTIMATE, None)
+            .await?;
 
         let json_response = serde_json::from_str::<JsonRpcResponse<RpcSupply>>(&response)?;
 
@@ -500,7 +510,7 @@ impl RpcClient {
             .to_string();
 
         let response = self
-            .call(None,&payload, GET_EPOCH_INFO_SIZE_ESTIMATE, None)
+            .call(None, &payload, GET_EPOCH_INFO_SIZE_ESTIMATE, None)
             .await?;
 
         let json_response = serde_json::from_str::<JsonRpcResponse<EpochInfo>>(&response)?;
@@ -531,7 +541,7 @@ impl RpcClient {
             )
             .to_string();
 
-        let response = self.call(None,&payload, max_response_bytes, None).await?;
+        let response = self.call(None, &payload, max_response_bytes, None).await?;
 
         let json_response =
             serde_json::from_str::<JsonRpcResponse<Vec<RpcKeyedAccount>>>(&response)?;
@@ -557,7 +567,7 @@ impl RpcClient {
             )
             .to_string();
 
-        let response = self.call(None,&payload, 156, None).await?;
+        let response = self.call(None, &payload, 156, None).await?;
 
         let json_response = serde_json::from_str::<JsonRpcResponse<String>>(&response)?;
 
@@ -587,7 +597,8 @@ impl RpcClient {
         let max_limit = 1000;
 
         let response = self
-            .call(None,
+            .call(
+                None,
                 &payload,
                 SIGNATURE_RESPONSE_SIZE_ESTIMATE * config.limit.unwrap_or(max_limit) as u64,
                 None,
@@ -624,7 +635,7 @@ impl RpcClient {
         let transform =
             TransformContext::from_name("transform_signature_statuses".to_owned(), vec![]);
 
-        let response = self.call(None,&payload, 128, Some(transform)).await?;
+        let response = self.call(None, &payload, 128, Some(transform)).await?;
         log!(
             DEBUG,
             "[ic-solana] get_signature_statuses response: {:?}",
@@ -670,7 +681,7 @@ impl RpcClient {
             .to_string();
 
         let response = self
-            .call(None,&payload, TRANSACTION_RESPONSE_SIZE_ESTIMATE, None)
+            .call(None, &payload, TRANSACTION_RESPONSE_SIZE_ESTIMATE, None)
             .await?;
 
         let json_response = serde_json::from_str::<
@@ -687,7 +698,7 @@ impl RpcClient {
     pub async fn get_transaction1(
         &self,
         signature: &Signature,
-        forward:Option<String>,
+        forward: Option<String>,
         config: RpcTransactionConfig,
     ) -> RpcResult<String> {
         let payload = RpcRequest::GetTransaction
@@ -698,7 +709,7 @@ impl RpcClient {
             .to_string();
 
         let response = self
-            .call(forward,&payload, TX_MEMO_RESP_SIZE_ESTIMATE, None)
+            .call(forward, &payload, TX_MEMO_RESP_SIZE_ESTIMATE, None)
             .await?;
 
         // let json_response = serde_json::from_str::<
@@ -746,7 +757,7 @@ impl RpcClient {
             .build_request_json(self.next_request_id(), json!([raw_tx, config]))
             .to_string();
 
-        let response = self.call(None,&payload, 156, None).await?;
+        let response = self.call(None, &payload, 156, None).await?;
 
         let json_response = serde_json::from_str::<JsonRpcResponse<String>>(&response)?;
 
@@ -771,7 +782,7 @@ impl RpcClient {
             .build_request_json(self.next_request_id(), json!([data_len]))
             .to_string();
 
-        let response = self.call(None,&payload, 156, None).await?;
+        let response = self.call(None, &payload, 156, None).await?;
 
         let json_response =
             serde_json::from_str::<JsonRpcResponse<OptionalContext<u64>>>(&response)?;
