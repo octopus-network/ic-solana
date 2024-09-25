@@ -19,24 +19,16 @@ cp $CANISTER_WASM.gz ./src/$CANISTER/$CANISTER.wasm.gz
 cp $CANISTER_WASM.gz ../octopus/omnity/route/solana/assets/
 cp ./src/$CANISTER/$CANISTER.did ../octopus/omnity/route/solana/assets/
 
-# Deploy schnorr canister
-dfx deploy schnorr_canister
-
-# Get the canister id
-SCHNORR_CANISTER_ID=$(dfx canister id schnorr_canister)
-
-echo "Schnorr canister id: $CANISTER_ID"
 
 # Deploy the solana canister and set the schnorr canister id
 # SOLANA_RPC_URL=https://solana-rpc-proxy-398338012986.us-central1.run.app/
-# SOLANA_RPC_URL="https://solana-devnet.g.alchemy.com/v2/ClRAj3-CPTvcl7CljBv-fdtwhVK-XWYQ"
+SOLANA_RPC_URL="https://solana-devnet.g.alchemy.com/v2/ClRAj3-CPTvcl7CljBv-fdtwhVK-XWYQ"
 # SOLANA_RPC_URL="http://localhost:8888/"
-SOLANA_RPC_URL="testnet"
+# SOLANA_RPC_URL="testnet"
 # SOLANA_RPC_URL="mainnet"
 dfx deploy ic-solana-provider --argument "( record { 
     rpc_url = opt \"${SOLANA_RPC_URL}\"; 
     nodesInSubnet = 28; 
-    schnorr_canister = opt \"${SCHNORR_CANISTER_ID}\";
     schnorr_key_name = null;
     })" \
     --mode=reinstall -y
@@ -53,7 +45,7 @@ CANISTER_WASM=target/wasm32-unknown-unknown/release/$(echo $CANISTER | tr '-' '_
 # Extract the did file
 candid-extractor $CANISTER_WASM > ./src/$CANISTER/$CANISTER.did
 
-dfx deploy test_canister --argument "( \"${CANISTER_ID}\", \"${SCHNORR_CANISTER_ID}\")" --mode=reinstall -y
+dfx deploy test_canister --argument "( \"${CANISTER_ID}\")" --mode=reinstall -y
 
 echo "Test canister id: $CANISTER_ID"
 

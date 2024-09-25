@@ -1,4 +1,3 @@
-use crate::state::read_state;
 use candid::Principal;
 
 use ic_management_canister_types::{
@@ -9,10 +8,8 @@ use serde_bytes::ByteBuf;
 
 /// Fetches the ed25519 public key from the schnorr canister.
 pub async fn eddsa_public_key(key_name: String, derivation_path: Vec<ByteBuf>) -> Vec<u8> {
-    let canister_id = read_state(|s| Principal::from_text(&s.schnorr_canister).unwrap());
-
     let res: Result<(SchnorrPublicKeyResponse,), _> = ic_cdk::call(
-        canister_id,
+        Principal::management_canister(),
         "schnorr_public_key",
         (SchnorrPublicKeyArgs {
             canister_id: None,
@@ -34,10 +31,8 @@ pub async fn sign_with_eddsa(
     derivation_path: Vec<ByteBuf>,
     message: Vec<u8>,
 ) -> Vec<u8> {
-    let canister_id = read_state(|s| Principal::from_text(&s.schnorr_canister).unwrap());
-
     let res: Result<(SignWithSchnorrReply,), _> = ic_cdk::call(
-        canister_id,
+        Principal::management_canister(),
         "sign_with_schnorr",
         (SignWithSchnorrArgs {
             message,

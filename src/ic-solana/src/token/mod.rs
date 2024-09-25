@@ -37,17 +37,13 @@ pub struct SolanaClient {
     pub payer: Pubkey,
     pub payer_derive_path: Vec<ByteBuf>,
     pub chainkey_name: String,
-    pub schnorr_canister: Principal,
+    pub forward: Option<String>,
 }
 
 impl SolanaClient {
-    pub async fn derive_account(
-        schnorr_canister: Principal,
-        chainkey_name: String,
-        derive_path: String,
-    ) -> Pubkey {
+    pub async fn derive_account(chainkey_name: String, derive_path: String) -> Pubkey {
         let path = vec![ByteBuf::from(derive_path.as_str())];
-        Pubkey::try_from(eddsa_public_key(schnorr_canister, chainkey_name, path).await).unwrap()
+        Pubkey::try_from(eddsa_public_key(chainkey_name, path).await).unwrap()
     }
 
     pub async fn query_transaction(
@@ -70,8 +66,12 @@ impl SolanaClient {
     }
 
     pub async fn get_latest_blockhash(&self) -> anyhow::Result<BlockHash> {
-        let response: Result<(RpcResult<String>,), _> =
-            ic_cdk::call(self.sol_canister_id, "sol_latestBlockhash", ()).await;
+        let response: Result<(RpcResult<String>,), _> = ic_cdk::call(
+            self.sol_canister_id,
+            "sol_latestBlockhash",
+            (self.forward.to_owned(),),
+        )
+        .await;
         let hash = response
             .map_err(|e| anyhow!(format!("request solana provider error: {:?}, {}", e.0, e.1)))?
             .0
@@ -79,9 +79,17 @@ impl SolanaClient {
         Ok(BlockHash::from_str(&hash)?)
     }
 
-    pub async fn get_account_info(&self, account: String) -> anyhow::Result<Option<String>> {
-        let r: Result<(RpcResult<Option<String>>,), _> =
-            ic_cdk::call(self.sol_canister_id, "sol_getAccountInfo", (account,)).await;
+    pub async fn get_account_info(
+        &self,
+        account: String,
+        // forward: Option<String>,
+    ) -> anyhow::Result<Option<String>> {
+        let r: Result<(RpcResult<Option<String>>,), _> = ic_cdk::call(
+            self.sol_canister_id,
+            "sol_getAccountInfo",
+            (account, self.forward.to_owned()),
+        )
+        .await;
         let resp = r
             .map_err(|e| {
                 anyhow!(format!(
@@ -105,20 +113,23 @@ impl SolanaClient {
         Ok(resp)
     }
 
-    pub async fn create_mint(&self, token_create_info: TokenInfo) -> anyhow::Result<Pubkey> {
+    pub async fn create_mint(
+        &self,
+        token_create_info: TokenInfo,
+        // forward: Option<String>,
+    ) -> anyhow::Result<Pubkey> {
         let space: usize = 82;
         // get rent exemption
         let response: Result<(RpcResult<u64>,), _> = ic_cdk::call(
             self.sol_canister_id,
             "sol_getminimumbalanceforrentexemption",
-            (space,),
+            (space, self.forward.to_owned()),
         )
         .await;
         let rent_exemption = response.unwrap().0.unwrap();
         let token_pubkey_derived_path = vec![ByteBuf::from(token_create_info.name.as_str())];
         let token_mint = Pubkey::try_from(
             eddsa_public_key(
-                self.schnorr_canister,
                 self.chainkey_name.clone(),
                 token_pubkey_derived_path.clone(),
             )
@@ -155,6 +166,7 @@ impl SolanaClient {
         &self,
         token_mint: Pubkey,
         token_info: TokenInfo,
+        // forward: Option<String>,
     ) -> anyhow::Result<String> {
         let mint_len = 234u64;
         let metadata = TokenMetadata {
@@ -175,7 +187,7 @@ impl SolanaClient {
         let response: Result<(RpcResult<u64>,), _> = ic_cdk::call(
             self.sol_canister_id,
             "sol_getminimumbalanceforrentexemption",
-            (space,),
+            (space, self.forward.to_owned()),
         )
         .await;
         let rent_exemption = response
@@ -256,6 +268,7 @@ impl SolanaClient {
         &self,
         owner_addr: &Pubkey,
         token_mint: &Pubkey,
+        // forward: Option<String>,
     ) -> anyhow::Result<String> {
         let instructions = vec![
             crate::token::associated_account::create_associated_token_account(
@@ -285,6 +298,7 @@ impl SolanaClient {
         associated_account: Pubkey,
         amount: u64,
         token_mint: Pubkey,
+        // forward: Option<String>,
     ) -> anyhow::Result<String> {
         let instructions = vec![token_instruction::mint_to(
             &token22_program_id(),
@@ -314,6 +328,7 @@ impl SolanaClient {
         &self,
         token_mint: Pubkey,
         token_info: TokenInfo,
+        // forward: Option<String>,
     ) -> anyhow::Result<String> {
         let metadata = TokenMetadata {
             update_authority: OptionalNonZeroPubkey(self.payer.to_owned()),
@@ -327,7 +342,7 @@ impl SolanaClient {
         let response: Result<(RpcResult<u64>,), _> = ic_cdk::call(
             self.sol_canister_id,
             "sol_getminimumbalanceforrentexemption",
-            (space,),
+            (space, self.forward.to_owned()),
         )
         .await;
         let rent_exemption = response
@@ -372,11 +387,16 @@ impl SolanaClient {
         Ok(tx_hash)
     }
 
-    pub async fn transfer_to(&self, to_account: Pubkey, amount: u64) -> anyhow::Result<String> {
+    pub async fn transfer_to(
+        &self,
+        to_account: Pubkey,
+        amount: u64,
+        // forward: Option<String>,
+    ) -> anyhow::Result<String> {
         let response: Result<(RpcResult<u64>,), _> = ic_cdk::call(
             self.sol_canister_id,
             "sol_getBalance",
-            (to_account.to_string(),),
+            (to_account.to_string(), self.forward.to_owned()),
         )
         .await;
 
@@ -407,15 +427,10 @@ impl SolanaClient {
     }
 
     async fn sign(&self, key_path: Vec<ByteBuf>, tx: Vec<u8>) -> anyhow::Result<Signature> {
-        let signature = sign_with_eddsa(
-            self.schnorr_canister,
-            self.chainkey_name.clone(),
-            key_path,
-            tx,
-        )
-        .await
-        .try_into()
-        .map_err(|e| anyhow!("invalid signature: {:?}", e))?;
+        let signature = sign_with_eddsa(self.chainkey_name.clone(), key_path, tx)
+            .await
+            .try_into()
+            .map_err(|e| anyhow!("invalid signature: {:?}", e))?;
         Ok(signature)
     }
 
@@ -423,6 +438,7 @@ impl SolanaClient {
         &self,
         instructions: &[Instruction],
         paths: Vec<Vec<ByteBuf>>,
+        // forward: Option<String>,
     ) -> anyhow::Result<String> {
         let blockhash = self.get_latest_blockhash().await?;
         log!(
@@ -452,7 +468,7 @@ impl SolanaClient {
         let response: Result<(RpcResult<String>,), _> = ic_cdk::call(
             self.sol_canister_id,
             "sol_sendRawTransaction",
-            (tx.to_string(),),
+            (tx.to_string(), self.forward.to_owned()),
         )
         .await;
         log!(DEBUG, "sol_sendRawTransaction response: {:?}", response);

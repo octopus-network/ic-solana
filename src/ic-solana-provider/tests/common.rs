@@ -21,7 +21,6 @@ pub fn init(ic: &PocketIc) -> Principal {
     let args = InitArgs {
         rpc_url: None,
         nodes_in_subnet: None,
-        schnorr_canister: Some(schnorr_canister_id.to_string()),
         schnorr_key_name: None,
     };
 

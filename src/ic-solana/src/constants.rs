@@ -37,10 +37,12 @@ pub const MAX_PDA_ACCOUNT_DATA_LENGTH: u64 = 10 * 1024;
 pub const SIGNATURE_RESPONSE_SIZE_ESTIMATE: u64 = 500;
 
 /// In case no memo is set transaction object should be around 1100 bytes long.
-pub const TRANSACTION_RESPONSE_SIZE_ESTIMATE: u64 = 2200;
+pub const TRANSACTION_RESPONSE_SIZE_ESTIMATE: u64 = 5 * 1024;
+
+pub const TRANSACTION_STATUS_RESPONSE_SIZE_ESTIMATE: u64 = 256;
 
 /// a tx includes tansfer + burn+ memo  should be around 5000 bytes long.
-pub const TX_MEMO_RESP_SIZE_ESTIMATE: u64 = 5000;
+pub const TX_MEMO_RESP_SIZE_ESTIMATE: u64 = 5 * 1024;
 
 pub const GET_BLOCK_RESPONSE_SIZE_ESTIMATE: u64 = 516_000;
 pub const GET_SUPPLY_SIZE_ESTIMATE: u64 = 1024;

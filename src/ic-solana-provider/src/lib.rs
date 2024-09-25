@@ -1,15 +1,13 @@
 use crate::types::SendTransactionRequest;
 use crate::utils::{rpc_client, validate_caller_not_anonymous};
 use eddsa_api::{eddsa_public_key, sign_with_eddsa};
-use ic_canister_log::export as export_logs;
 use ic_canister_log::log;
-use ic_canisters_http_types::{HttpRequest, HttpResponse, HttpResponseBuilder};
+use ic_canisters_http_types::{HttpRequest, HttpResponse};
 use ic_cdk::api::management_canister::http_request::{
     CanisterHttpRequestArgument, HttpHeader, HttpMethod, HttpResponse as TransformedHttpResponse,
     TransformArgs,
 };
 use ic_cdk::{query, update};
-use ic_solana::{http_request_required_cycles, ic_log};
 use ic_solana::ic_log::DEBUG;
 use ic_solana::response::{OptionalContext, Response, RpcBlockhash};
 use ic_solana::rpc_client::{JsonRpcResponse, RpcResult};
@@ -19,6 +17,7 @@ use ic_solana::types::{
     Signature, Transaction, TransactionStatus, UiAccount, UiAccountEncoding, UiTokenAmount,
     UiTransactionEncoding,
 };
+use ic_solana::{http_request_required_cycles, ic_log};
 use ic_stable_structures::writer::Writer;
 use ic_stable_structures::Memory;
 // use migration::{migrate, PreState};
@@ -50,22 +49,6 @@ pub async fn get_address() -> String {
 }
 
 ///
-/// Calls a JSON-RPC method on a Solana node at the specified URL.
-///
-#[update]
-pub async fn request(method: String, params: String, max_response_bytes: u64) -> RpcResult<String> {
-    let client = rpc_client();
-    let parsed_params: Value = from_str(&params).expect("Failed to parse JSON");
-    let payload = serde_json::to_string(&json!({
-        "jsonrpc": "2.0",
-        "id": client.next_request_id(),
-        "method": &method,
-        "params": parsed_params
-    }))?;
-    client.call(None, &payload, max_response_bytes, None).await
-}
-
-///
 /// Calculates the cost of an RPC request.
 ///
 #[query(name = "requestCost")]
@@ -88,15 +71,39 @@ pub fn request_cost(payload: String, max_response_bytes: u64) -> u128 {
 }
 
 ///
+/// Calls a JSON-RPC method on a Solana node at the specified URL.
+///
+#[update]
+pub async fn request(
+    method: String,
+    params: String,
+    max_response_bytes: u64,
+    forward: Option<String>,
+) -> RpcResult<String> {
+    let client = rpc_client();
+    let parsed_params: Value = from_str(&params).expect("Failed to parse JSON");
+    let payload = serde_json::to_string(&json!({
+        "jsonrpc": "2.0",
+        "id": client.next_request_id(),
+        "method": &method,
+        "params": parsed_params
+    }))?;
+    client
+        .call(forward, &payload, max_response_bytes, None)
+        .await
+}
+
+///
 /// Returns the lamport balance of the account of provided Pubkey.
 ///
 #[update(name = "sol_getBalance")]
-pub async fn sol_get_balance(pubkey: String) -> RpcResult<u64> {
+pub async fn sol_get_balance(pubkey: String, forward: Option<String>) -> RpcResult<u64> {
     let client = rpc_client();
     let balance = client
         .get_balance(
             &Pubkey::from_str(&pubkey).expect("Invalid public key"),
             RpcContextConfig::default(),
+            forward,
         )
         .await?;
     Ok(balance)
@@ -106,10 +113,13 @@ pub async fn sol_get_balance(pubkey: String) -> RpcResult<u64> {
 /// Returns minimum balance required to make account rent exempt.
 ///
 #[update(name = "sol_getminimumbalanceforrentexemption")]
-pub async fn sol_get_minimum_balance_for_rent_exemption(data_len: usize) -> RpcResult<u64> {
+pub async fn sol_get_minimum_balance_for_rent_exemption(
+    data_len: usize,
+    forward: Option<String>,
+) -> RpcResult<u64> {
     let client = rpc_client();
     let balance = client
-        .get_minimum_balance_for_rent_exemption(data_len)
+        .get_minimum_balance_for_rent_exemption(data_len, forward)
         .await?;
     Ok(balance)
 }
@@ -118,13 +128,17 @@ pub async fn sol_get_minimum_balance_for_rent_exemption(data_len: usize) -> RpcR
 /// Returns the token balance of an SPL Token account.
 ///
 #[update(name = "sol_getTokenBalance")]
-pub async fn sol_get_token_balance(pubkey: String) -> RpcResult<UiTokenAmount> {
+pub async fn sol_get_token_balance(
+    pubkey: String,
+    forward: Option<String>,
+) -> RpcResult<UiTokenAmount> {
     let client = rpc_client();
     let commitment = None;
     let balance = client
         .get_token_account_balance(
             &Pubkey::from_str(&pubkey).expect("Invalid public key"),
             commitment,
+            forward,
         )
         .await?;
     Ok(balance)
@@ -134,10 +148,10 @@ pub async fn sol_get_token_balance(pubkey: String) -> RpcResult<UiTokenAmount> {
 /// Returns the latest blockhash.
 ///
 #[update(name = "sol_latestBlockhash")]
-pub async fn sol_get_latest_blockhash() -> RpcResult<String> {
+pub async fn sol_get_latest_blockhash(forward: Option<String>) -> RpcResult<String> {
     let client = rpc_client();
     let blockhash = client
-        .get_latest_blockhash(RpcContextConfig::default())
+        .get_latest_blockhash(RpcContextConfig::default(), forward)
         .await?;
     Ok(blockhash.to_string())
 }
@@ -214,7 +228,10 @@ fn transform_blockhash(mut args: TransformArgs) -> TransformedHttpResponse {
 /// Returns all information associated with the account of provided Pubkey.
 ///
 #[update(name = "sol_getAccountInfo")]
-pub async fn sol_get_account_info(pubkey: String) -> RpcResult<Option<String>> {
+pub async fn sol_get_account_info(
+    pubkey: String,
+    forward: Option<String>,
+) -> RpcResult<Option<String>> {
     let client = rpc_client();
     let account_info = client
         .get_account_info1(
@@ -227,6 +244,7 @@ pub async fn sol_get_account_info(pubkey: String) -> RpcResult<Option<String>> {
                 min_context_slot: None,
             },
             None,
+            forward,
         )
         .await?;
     Ok(account_info)
@@ -304,8 +322,8 @@ pub async fn sol_get_transaction(signature: String, forward: Option<String>) -> 
     let response = client
         .get_transaction1(
             &signature,
-            forward,
             RpcTransactionConfig::new_with_encoding(&Some(UiTransactionEncoding::JsonParsed)),
+            forward,
         )
         .await?;
     Ok(response)
@@ -315,7 +333,10 @@ pub async fn sol_get_transaction(signature: String, forward: Option<String>) -> 
 /// Returns the statuses of a list of transaction signatures.
 ///
 #[update(name = "sol_getSignatureStatuses")]
-pub async fn sol_get_signature_statuses(signatures: Vec<String>) -> RpcResult<String> {
+pub async fn sol_get_signature_statuses(
+    signatures: Vec<String>,
+    forward: Option<String>,
+) -> RpcResult<String> {
     let client = rpc_client();
 
     let signatures = signatures
@@ -329,6 +350,7 @@ pub async fn sol_get_signature_statuses(signatures: Vec<String>) -> RpcResult<St
             RpcSignatureStatusConfig {
                 search_transaction_history: true,
             },
+            forward,
         )
         .await?;
     log!(
@@ -412,7 +434,10 @@ fn transform_signature_statuses(mut args: TransformArgs) -> TransformedHttpRespo
 /// Send a transaction to the network.
 ///
 #[update(name = "sol_sendTransaction")]
-pub async fn sol_send_transaction(req: SendTransactionRequest) -> RpcResult<String> {
+pub async fn sol_send_transaction(
+    req: SendTransactionRequest,
+    forward: Option<String>,
+) -> RpcResult<String> {
     let caller = validate_caller_not_anonymous();
     let client = rpc_client();
 
@@ -420,7 +445,7 @@ pub async fn sol_send_transaction(req: SendTransactionRequest) -> RpcResult<Stri
         Some(r) => BlockHash::from_str(&r).expect("Invalid recent blockhash"),
         None => {
             client
-                .get_latest_blockhash(RpcContextConfig::default())
+                .get_latest_blockhash(RpcContextConfig::default(), forward.clone())
                 .await?
         }
     };
@@ -446,7 +471,7 @@ pub async fn sol_send_transaction(req: SendTransactionRequest) -> RpcResult<Stri
     tx.add_signature(0, signature);
 
     let signature = client
-        .send_transaction(tx, RpcSendTransactionConfig::default())
+        .send_transaction(tx, RpcSendTransactionConfig::default(), forward)
         .await?;
 
     Ok(signature.to_string())
@@ -456,7 +481,10 @@ pub async fn sol_send_transaction(req: SendTransactionRequest) -> RpcResult<Stri
 /// Submits a signed transaction to the cluster for processing.
 ///
 #[update(name = "sol_sendRawTransaction")]
-pub async fn send_raw_transaction(raw_signed_transaction: String) -> RpcResult<String> {
+pub async fn send_raw_transaction(
+    raw_signed_transaction: String,
+    forward: Option<String>,
+) -> RpcResult<String> {
     log!(
         DEBUG,
         "[ic-solana-provider] send_raw_transaction raw_signed_transaction: {:?}",
@@ -468,7 +496,7 @@ pub async fn send_raw_transaction(raw_signed_transaction: String) -> RpcResult<S
     let tx = Transaction::from_str(&raw_signed_transaction).expect("Invalid transaction");
 
     let signature = client
-        .send_transaction(tx, RpcSendTransactionConfig::default())
+        .send_transaction(tx, RpcSendTransactionConfig::default(), forward)
         .await?;
 
     Ok(signature.to_string())
@@ -512,16 +540,6 @@ fn transform_tx_response(mut args: TransformArgs) -> TransformedHttpResponse {
         args.response
     );
     args.response
-}
-
-#[query]
-fn get_responses() -> Vec<(u64, TransformedHttpResponse)> {
-    read_state(|s| {
-        s.responses
-            .iter()
-            .map(|(timestamp, resp)| (timestamp.to_owned(), resp.to_owned()))
-            .collect::<Vec<_>>()
-    })
 }
 
 #[query(hidden = true)]
@@ -582,13 +600,16 @@ fn post_upgrade(args: InitArgs) {
     if let Some(v) = args.nodes_in_subnet {
         mutate_state(|s| s.nodes_in_subnet = v);
     }
-    if let Some(v) = args.schnorr_canister {
-        mutate_state(|s| s.schnorr_canister = v);
-    }
+
     if let Some(v) = args.schnorr_key_name {
         mutate_state(|s| s.schnorr_key_name = v);
     }
     log!(DEBUG, "[ic-solana-provider] upgrade successfully!");
+}
+
+#[update]
+fn update_rpc(rpc: String) {
+    mutate_state(|s| s.rpc_url = rpc);
 }
 
 ic_cdk::export_candid!();

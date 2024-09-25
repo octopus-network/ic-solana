@@ -237,12 +237,16 @@ impl RpcClient {
     /// Method relies on the `getLatestBlockhash` RPC call to get the latest blockhash:
     ///   https://solana.com/docs/rpc/http/getLatestBlockhash
     ///
-    pub async fn get_latest_blockhash(&self, config: RpcContextConfig) -> RpcResult<BlockHash> {
+    pub async fn get_latest_blockhash(
+        &self,
+        config: RpcContextConfig,
+        forward: Option<String>,
+    ) -> RpcResult<BlockHash> {
         let payload = RpcRequest::GetLatestBlockhash
             .build_request_json(self.next_request_id(), json!([config]))
             .to_string();
         let transform = TransformContext::from_name("transform_blockhash".to_owned(), vec![]);
-        let response = self.call(None, &payload, 156, Some(transform)).await?;
+        let response = self.call(forward, &payload, 156, Some(transform)).await?;
 
         let json_response =
             serde_json::from_str::<JsonRpcResponse<OptionalContext<RpcBlockhash>>>(&response)?;
@@ -269,12 +273,17 @@ impl RpcClient {
     /// Method relies on the `getBalance` RPC call to get the balance:
     ///   https://solana.com/docs/rpc/http/getBalance
     ///
-    pub async fn get_balance(&self, pubkey: &Pubkey, config: RpcContextConfig) -> RpcResult<u64> {
+    pub async fn get_balance(
+        &self,
+        pubkey: &Pubkey,
+        config: RpcContextConfig,
+        forward: Option<String>,
+    ) -> RpcResult<u64> {
         let payload = RpcRequest::GetBalance
             .build_request_json(self.next_request_id(), json!([pubkey.to_string(), config]))
             .to_string();
 
-        let response = self.call(None, &payload, 156, None).await?;
+        let response = self.call(forward, &payload, 156, None).await?;
 
         let json_response =
             serde_json::from_str::<JsonRpcResponse<OptionalContext<u64>>>(&response)?;
@@ -296,6 +305,7 @@ impl RpcClient {
         &self,
         pubkey: &Pubkey,
         commitment: Option<CommitmentConfig>,
+        forward: Option<String>,
     ) -> RpcResult<UiTokenAmount> {
         let payload = RpcRequest::GetTokenAccountBalance
             .build_request_json(
@@ -304,7 +314,7 @@ impl RpcClient {
             )
             .to_string();
 
-        let response = self.call(None, &payload, 256, None).await?;
+        let response = self.call(forward, &payload, 256, None).await?;
 
         let json_response =
             serde_json::from_str::<JsonRpcResponse<OptionalContext<UiTokenAmount>>>(&response)?;
@@ -360,6 +370,7 @@ impl RpcClient {
         pubkey: &Pubkey,
         config: RpcAccountInfoConfig,
         max_response_bytes: Option<u64>,
+        forward: Option<String>,
     ) -> RpcResult<Option<String>> {
         let payload = RpcRequest::GetAccountInfo
             .build_request_json(self.next_request_id(), json!([pubkey.to_string(), config]))
@@ -368,7 +379,7 @@ impl RpcClient {
         let transform = TransformContext::from_name("transform_account".to_owned(), vec![]);
         let response = self
             .call(
-                None,
+                forward,
                 &payload,
                 max_response_bytes.unwrap_or(MAX_PDA_ACCOUNT_DATA_LENGTH),
                 Some(transform),
@@ -396,12 +407,12 @@ impl RpcClient {
     ///
     /// Returns the current Solana version running on the node.
     ///
-    pub async fn get_version(&self) -> RpcResult<RpcVersionInfo> {
+    pub async fn get_version(&self, forward: Option<String>) -> RpcResult<RpcVersionInfo> {
         let payload = RpcRequest::GetVersion
             .build_request_json(self.next_request_id(), Value::Null)
             .to_string();
 
-        let response = self.call(None, &payload, 128, None).await?;
+        let response = self.call(forward, &payload, 128, None).await?;
 
         let json_response = serde_json::from_str::<JsonRpcResponse<RpcVersionInfo>>(&response)?;
 
@@ -416,12 +427,12 @@ impl RpcClient {
     /// Returns the current health of the node.
     /// A healthy node is one that is within HEALTH_CHECK_SLOT_DISTANCE slots of the latest cluster confirmed slot.
     ///
-    pub async fn get_health(&self) -> RpcResult<String> {
+    pub async fn get_health(&self, forward: Option<String>) -> RpcResult<String> {
         let payload = RpcRequest::GetHealth
             .build_request_json(self.next_request_id(), Value::Null)
             .to_string();
 
-        let response = self.call(None, &payload, 256, None).await?;
+        let response = self.call(forward, &payload, 256, None).await?;
 
         let json_response = serde_json::from_str::<JsonRpcResponse<String>>(&response)?;
 
@@ -439,13 +450,14 @@ impl RpcClient {
         &self,
         slot: Slot,
         encoding: UiTransactionEncoding,
+        forward: Option<String>,
     ) -> RpcResult<EncodedConfirmedBlock> {
         let payload = RpcRequest::GetBlock
             .build_request_json(self.next_request_id(), json!([slot, encoding]))
             .to_string();
 
         let response = self
-            .call(None, &payload, GET_BLOCK_RESPONSE_SIZE_ESTIMATE, None)
+            .call(forward, &payload, GET_BLOCK_RESPONSE_SIZE_ESTIMATE, None)
             .await?;
 
         let json_response =
@@ -461,12 +473,12 @@ impl RpcClient {
     ///
     /// Returns the slot that has reached the given or default commitment level.
     ///
-    pub async fn get_slot(&self) -> RpcResult<Slot> {
+    pub async fn get_slot(&self, forward: Option<String>) -> RpcResult<Slot> {
         let payload = RpcRequest::GetSlot
             .build_request_json(self.next_request_id(), Value::Null)
             .to_string();
 
-        let response = self.call(None, &payload, 128, None).await?;
+        let response = self.call(forward, &payload, 128, None).await?;
 
         let json_response = serde_json::from_str::<JsonRpcResponse<Slot>>(&response)?;
 
@@ -480,13 +492,17 @@ impl RpcClient {
     ///
     /// Returns information about the current supply.
     ///
-    pub async fn get_supply(&self, config: RpcSupplyConfig) -> RpcResult<RpcSupply> {
+    pub async fn get_supply(
+        &self,
+        config: RpcSupplyConfig,
+        forward: Option<String>,
+    ) -> RpcResult<RpcSupply> {
         let payload = RpcRequest::GetSupply
             .build_request_json(self.next_request_id(), json!([config]))
             .to_string();
 
         let response = self
-            .call(None, &payload, GET_SUPPLY_SIZE_ESTIMATE, None)
+            .call(forward, &payload, GET_SUPPLY_SIZE_ESTIMATE, None)
             .await?;
 
         let json_response = serde_json::from_str::<JsonRpcResponse<RpcSupply>>(&response)?;
@@ -504,13 +520,17 @@ impl RpcClient {
     /// Method relies on the `getEpochInfo` RPC call to get the epoch info:
     ///   https://solana.com/docs/rpc/http/getEpochInfo
     ///
-    pub async fn get_epoch_info(&self, config: RpcContextConfig) -> RpcResult<EpochInfo> {
+    pub async fn get_epoch_info(
+        &self,
+        config: RpcContextConfig,
+        forward: Option<String>,
+    ) -> RpcResult<EpochInfo> {
         let payload = RpcRequest::GetEpochInfo
             .build_request_json(self.next_request_id(), json!([config]))
             .to_string();
 
         let response = self
-            .call(None, &payload, GET_EPOCH_INFO_SIZE_ESTIMATE, None)
+            .call(forward, &payload, GET_EPOCH_INFO_SIZE_ESTIMATE, None)
             .await?;
 
         let json_response = serde_json::from_str::<JsonRpcResponse<EpochInfo>>(&response)?;
@@ -533,6 +553,7 @@ impl RpcClient {
         program_id: &Pubkey,
         config: RpcProgramAccountsConfig,
         max_response_bytes: u64,
+        forward: Option<String>,
     ) -> RpcResult<Vec<RpcKeyedAccount>> {
         let payload = RpcRequest::GetProgramAccounts
             .build_request_json(
@@ -541,7 +562,9 @@ impl RpcClient {
             )
             .to_string();
 
-        let response = self.call(None, &payload, max_response_bytes, None).await?;
+        let response = self
+            .call(forward, &payload, max_response_bytes, None)
+            .await?;
 
         let json_response =
             serde_json::from_str::<JsonRpcResponse<Vec<RpcKeyedAccount>>>(&response)?;
@@ -559,7 +582,12 @@ impl RpcClient {
     /// Method relies on the `requestAirdrop` RPC call to request the airdrop:
     ///   https://solana.com/docs/rpc/http/requestAirdrop
     ///
-    pub async fn request_airdrop(&self, pubkey: &Pubkey, lamports: u64) -> RpcResult<String> {
+    pub async fn request_airdrop(
+        &self,
+        pubkey: &Pubkey,
+        lamports: u64,
+        forward: Option<String>,
+    ) -> RpcResult<String> {
         let payload = RpcRequest::RequestAirdrop
             .build_request_json(
                 self.next_request_id(),
@@ -567,7 +595,7 @@ impl RpcClient {
             )
             .to_string();
 
-        let response = self.call(None, &payload, 156, None).await?;
+        let response = self.call(forward, &payload, 156, None).await?;
 
         let json_response = serde_json::from_str::<JsonRpcResponse<String>>(&response)?;
 
@@ -589,6 +617,7 @@ impl RpcClient {
         &self,
         pubkey: &Pubkey,
         config: RpcSignaturesForAddressConfig,
+        forward: Option<String>,
     ) -> RpcResult<Vec<RpcConfirmedTransactionStatusWithSignature>> {
         let payload = RpcRequest::GetSignaturesForAddress
             .build_request_json(self.next_request_id(), json!([pubkey.to_string(), config]))
@@ -598,7 +627,7 @@ impl RpcClient {
 
         let response = self
             .call(
-                None,
+                forward,
                 &payload,
                 SIGNATURE_RESPONSE_SIZE_ESTIMATE * config.limit.unwrap_or(max_limit) as u64,
                 None,
@@ -626,16 +655,24 @@ impl RpcClient {
         &self,
         signatures: &[Signature],
         config: RpcSignatureStatusConfig,
+        forward: Option<String>,
     ) -> RpcResult<Vec<TransactionStatus>> {
         let sigs = signatures.iter().map(|s| s.to_string()).collect::<Vec<_>>();
         let payload = RpcRequest::GetSignatureStatuses
             .build_request_json(self.next_request_id(), json!([sigs, config]))
             .to_string();
 
-        let transform =
-            TransformContext::from_name("transform_signature_statuses".to_owned(), vec![]);
+        // let transform =
+        //     TransformContext::from_name("transform_signature_statuses".to_owned(), vec![]);
 
-        let response = self.call(None, &payload, 128, Some(transform)).await?;
+        let response = self
+            .call(
+                forward,
+                &payload,
+                TRANSACTION_STATUS_RESPONSE_SIZE_ESTIMATE,
+                None,
+            )
+            .await?;
         log!(
             DEBUG,
             "[ic-solana] get_signature_statuses response: {:?}",
@@ -657,8 +694,8 @@ impl RpcClient {
 
         let not_found_error =
             || RpcError::Text(format!("StatusNotFound: signatures={:?}", signatures));
-        let rpc_account = json_response.result.ok_or_else(not_found_error)?;
-        let status = rpc_account.value.ok_or_else(not_found_error)?;
+        let resp = json_response.result.ok_or_else(not_found_error)?;
+        let status = resp.value.ok_or_else(not_found_error)?;
         Ok(status)
     }
 
@@ -672,6 +709,7 @@ impl RpcClient {
         &self,
         signature: &Signature,
         config: RpcTransactionConfig,
+        forward: Option<String>,
     ) -> RpcResult<EncodedConfirmedTransactionWithStatusMeta> {
         let payload = RpcRequest::GetTransaction
             .build_request_json(
@@ -681,7 +719,7 @@ impl RpcClient {
             .to_string();
 
         let response = self
-            .call(None, &payload, TRANSACTION_RESPONSE_SIZE_ESTIMATE, None)
+            .call(forward, &payload, TRANSACTION_RESPONSE_SIZE_ESTIMATE, None)
             .await?;
 
         let json_response = serde_json::from_str::<
@@ -698,8 +736,8 @@ impl RpcClient {
     pub async fn get_transaction1(
         &self,
         signature: &Signature,
-        forward: Option<String>,
         config: RpcTransactionConfig,
+        forward: Option<String>,
     ) -> RpcResult<String> {
         let payload = RpcRequest::GetTransaction
             .build_request_json(
@@ -740,6 +778,7 @@ impl RpcClient {
         &self,
         tx: Transaction,
         config: RpcSendTransactionConfig,
+        forward: Option<String>,
     ) -> RpcResult<Signature> {
         let serialized = tx.serialize();
 
@@ -757,7 +796,7 @@ impl RpcClient {
             .build_request_json(self.next_request_id(), json!([raw_tx, config]))
             .to_string();
 
-        let response = self.call(None, &payload, 156, None).await?;
+        let response = self.call(forward, &payload, 156, None).await?;
 
         let json_response = serde_json::from_str::<JsonRpcResponse<String>>(&response)?;
 
@@ -777,12 +816,16 @@ impl RpcClient {
     /// Method relies on the `getminimumbalanceforrentexemption` RPC call to get the balance:
     ///   https://solana.com/docs/rpc/http/getminimumbalanceforrentexemption
     ///
-    pub async fn get_minimum_balance_for_rent_exemption(&self, data_len: usize) -> RpcResult<u64> {
+    pub async fn get_minimum_balance_for_rent_exemption(
+        &self,
+        data_len: usize,
+        forward: Option<String>,
+    ) -> RpcResult<u64> {
         let payload = RpcRequest::GetMinimumBalanceForRentExemption
             .build_request_json(self.next_request_id(), json!([data_len]))
             .to_string();
 
-        let response = self.call(None, &payload, 156, None).await?;
+        let response = self.call(forward, &payload, 156, None).await?;
 
         let json_response =
             serde_json::from_str::<JsonRpcResponse<OptionalContext<u64>>>(&response)?;

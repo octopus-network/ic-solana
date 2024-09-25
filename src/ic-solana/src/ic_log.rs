@@ -1,16 +1,31 @@
-use ic_canister_log::{declare_log_buffer, GlobalBuffer};
+use ic_canister_log::export as export_logs;
+use ic_canister_log::{declare_log_buffer, GlobalBuffer, Sink};
 use ic_canisters_http_types::{HttpRequest, HttpResponse, HttpResponseBuilder};
 use serde_derive::Deserialize;
-use ic_canister_log::export as export_logs;
 use time::OffsetDateTime;
 
-declare_log_buffer!(name = DEBUG, capacity = 1000);
-declare_log_buffer!(name = INFO, capacity = 1000);
-declare_log_buffer!(name = WARNING, capacity = 1000);
-declare_log_buffer!(name = ERROR, capacity = 1000);
-declare_log_buffer!(name = CRITICAL, capacity = 1000);
+declare_log_buffer!(name = DEBUG_BUF, capacity = 1000);
+declare_log_buffer!(name = INFO_BUF, capacity = 1000);
+declare_log_buffer!(name = WARNING_BUF, capacity = 1000);
+declare_log_buffer!(name = ERROR_BUF, capacity = 1000);
+declare_log_buffer!(name = CRITICAL_BUF, capacity = 1000);
 
-#[derive(Clone, serde::Serialize, Deserialize, Debug,Copy)]
+pub struct PrintProxySink(&'static str, &'static GlobalBuffer);
+
+impl Sink for PrintProxySink {
+    fn append(&self, entry: ic_canister_log::LogEntry) {
+        ic_cdk::println!("{} {}:{} {}", self.0, entry.file, entry.line, entry.message);
+        self.1.append(entry)
+    }
+}
+
+pub const DEBUG: PrintProxySink = PrintProxySink("DEBUG", &DEBUG_BUF);
+pub const INFO: PrintProxySink = PrintProxySink("INFO", &INFO_BUF);
+pub const WARNING: PrintProxySink = PrintProxySink("WARNING", &WARNING_BUF);
+pub const ERROR: PrintProxySink = PrintProxySink("ERROR", &ERROR_BUF);
+pub const CRITICAL: PrintProxySink = PrintProxySink("WARNING", &CRITICAL_BUF);
+
+#[derive(Clone, serde::Serialize, Deserialize, Debug, Copy)]
 pub enum Priority {
     DEBUG,
     INFO,
@@ -76,16 +91,23 @@ pub fn http_request(req: HttpRequest) -> HttpResponse {
         };
 
         let mut entries: Log = Default::default();
-        merge_log(&mut entries, &DEBUG, Priority::DEBUG);
-        merge_log(&mut entries, &INFO, Priority::INFO);
-        merge_log(&mut entries, &WARNING, Priority::WARNING);
-        merge_log(&mut entries, &ERROR, Priority::ERROR);
-        merge_log(&mut entries, &CRITICAL, Priority::CRITICAL);
+        merge_log(&mut entries, &DEBUG_BUF, Priority::DEBUG);
+        merge_log(&mut entries, &INFO_BUF, Priority::INFO);
+        merge_log(&mut entries, &WARNING_BUF, Priority::WARNING);
+        merge_log(&mut entries, &ERROR_BUF, Priority::ERROR);
+        merge_log(&mut entries, &CRITICAL_BUF, Priority::CRITICAL);
         entries
             .entries
             .retain(|entry| entry.timestamp >= max_skip_timestamp);
-        entries.entries.sort_by(|a,b| a.timestamp.cmp(&b.timestamp));
-        let logs = entries.entries.into_iter().skip(offset as usize).take(limit as usize).collect::<Vec<_>>();
+        entries
+            .entries
+            .sort_by(|a, b| a.timestamp.cmp(&b.timestamp));
+        let logs = entries
+            .entries
+            .into_iter()
+            .skip(offset as usize)
+            .take(limit as usize)
+            .collect::<Vec<_>>();
         HttpResponseBuilder::ok()
             .header("Content-Type", "application/json; charset=utf-8")
             .with_body_and_content_length(serde_json::to_string(&logs).unwrap_or_default())
@@ -95,13 +117,15 @@ pub fn http_request(req: HttpRequest) -> HttpResponse {
     }
 }
 
-fn merge_log( entries: &mut Log, buffer: &'static GlobalBuffer,  priority: Priority) {
+fn merge_log(entries: &mut Log, buffer: &'static GlobalBuffer, priority: Priority) {
     let canister_id = ic_cdk::api::id();
     for entry in export_logs(buffer) {
         entries.entries.push(LogEntry {
             timestamp: entry.timestamp,
             canister_id: canister_id.to_string(),
-            time_str: OffsetDateTime::from_unix_timestamp_nanos(entry.timestamp as i128).unwrap().to_string(),
+            time_str: OffsetDateTime::from_unix_timestamp_nanos(entry.timestamp as i128)
+                .unwrap()
+                .to_string(),
             counter: entry.counter,
             priority: priority,
             file: entry.file.to_string(),
@@ -109,5 +133,4 @@ fn merge_log( entries: &mut Log, buffer: &'static GlobalBuffer,  priority: Prior
             message: entry.message,
         });
     }
-
 }

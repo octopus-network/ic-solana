@@ -3,41 +3,35 @@ use candid::{CandidType, Deserialize};
 use ic_solana::types::Cluster;
 use serde::Serialize;
 use std::cell::RefCell;
-use std::collections::BTreeMap;
-use std::env;
+
 thread_local! {
     pub static STATE: RefCell<Option<State>> = RefCell::default();
 }
-use ic_cdk::api::management_canister::http_request::HttpResponse;
+
 /// Solana RPC canister initialization data.
 #[derive(Debug, Deserialize, CandidType, Clone)]
 pub struct InitArgs {
     pub rpc_url: Option<String>,
     pub nodes_in_subnet: Option<u32>,
-    pub schnorr_canister: Option<String>,
     pub schnorr_key_name: Option<String>,
 }
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct State {
     pub rpc_url: String,
-    pub schnorr_canister: String,
     pub schnorr_key_name: String,
     pub nodes_in_subnet: u32,
-    pub responses: BTreeMap<u64, HttpResponse>,
 }
 
 impl From<InitArgs> for State {
     fn from(value: InitArgs) -> Self {
         Self {
             rpc_url: value.rpc_url.unwrap_or(Cluster::Devnet.to_string()),
-            schnorr_canister: env::var("CANISTER_ID_SCHNORR_CANISTER")
-                .unwrap_or(value.schnorr_canister.expect("Missing schnorr_canister")),
+
             schnorr_key_name: value
                 .schnorr_key_name
                 .unwrap_or(SCHNORR_KEY_NAME.to_string()),
             nodes_in_subnet: value.nodes_in_subnet.unwrap_or(NODES_IN_FIDUCIARY_SUBNET),
-            responses: BTreeMap::default(),
         }
     }
 }
@@ -45,7 +39,7 @@ impl From<InitArgs> for State {
 impl std::fmt::Display for State {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "Solana RPC URL: {:?}", self.rpc_url)?;
-        writeln!(f, "Schnorr canister: {:?}", self.schnorr_canister)?;
+
         writeln!(f, "Schnorr key name: {:?}", self.schnorr_key_name)?;
         writeln!(f, "Nodes in subnet: {:?}", self.nodes_in_subnet)?;
         Ok(())
