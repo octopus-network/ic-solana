@@ -49,3 +49,6 @@ pub const GET_SUPPLY_SIZE_ESTIMATE: u64 = 1024;
 pub const GET_EPOCH_INFO_SIZE_ESTIMATE: u64 = 56;
 
 pub const NODES_IN_SUBNET: u32 = 28;
+// https://internetcomputer.org/docs/current/references/t-sigs-how-it-works/#fees-for-the-t-schnorr-production-key
+// pub const EDDSA_SIGN_COST: u128 = 26_153_846_153;
+pub const EDDSA_SIGN_COST: u128 = 26_200_000_000;

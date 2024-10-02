@@ -5,6 +5,8 @@ use ic_management_canister_types::{
 };
 use serde_bytes::ByteBuf;
 
+use crate::constants::EDDSA_SIGN_COST;
+
 /// Signs a message with an ed25519 key.
 pub async fn sign_with_eddsa(
     key_name: String,
@@ -24,7 +26,7 @@ pub async fn sign_with_eddsa(
         },),
         // https://internetcomputer.org/docs/current/references/t-sigs-how-it-works/#fees-for-the-t-schnorr-production-key
         // 26_153_846_153,
-        26_200_000_000,
+        EDDSA_SIGN_COST as u64,
     )
     .await;
 
