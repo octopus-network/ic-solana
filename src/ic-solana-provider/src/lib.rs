@@ -547,7 +547,8 @@ fn http_request(req: HttpRequest) -> HttpResponse {
     if ic_cdk::api::data_certificate().is_none() {
         ic_cdk::trap("update call rejected");
     }
-    ic_log::http_request(req)
+    let enable_debug = read_state(|s| s.enable_debug);
+    ic_log::http_request(req, enable_debug)
 }
 
 #[ic_cdk::init]
@@ -607,9 +608,14 @@ fn post_upgrade(args: InitArgs) {
     log!(DEBUG, "[ic-solana-provider] upgrade successfully!");
 }
 
-#[update]
+#[update(hidden = true)]
 fn update_rpc(rpc: String) {
     mutate_state(|s| s.rpc_url = rpc);
+}
+
+#[update(hidden = true)]
+fn debug(enable: bool) {
+    mutate_state(|s| s.enable_debug = enable);
 }
 
 ic_cdk::export_candid!();

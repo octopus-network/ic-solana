@@ -21,6 +21,7 @@ pub struct State {
     pub rpc_url: String,
     pub schnorr_key_name: String,
     pub nodes_in_subnet: u32,
+    pub enable_debug: bool,
 }
 
 impl From<InitArgs> for State {
@@ -32,6 +33,7 @@ impl From<InitArgs> for State {
                 .schnorr_key_name
                 .unwrap_or(SCHNORR_KEY_NAME.to_string()),
             nodes_in_subnet: value.nodes_in_subnet.unwrap_or(NODES_IN_FIDUCIARY_SUBNET),
+            enable_debug: false,
         }
     }
 }
@@ -39,9 +41,9 @@ impl From<InitArgs> for State {
 impl std::fmt::Display for State {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "Solana RPC URL: {:?}", self.rpc_url)?;
-
         writeln!(f, "Schnorr key name: {:?}", self.schnorr_key_name)?;
         writeln!(f, "Nodes in subnet: {:?}", self.nodes_in_subnet)?;
+        writeln!(f, "Enable debug: {:?}", self.enable_debug)?;
         Ok(())
     }
 }

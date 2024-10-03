@@ -16,6 +16,7 @@ pub fn _migrate(pre_state: PreState) -> State {
         rpc_url: pre_state.rpc_url,
         schnorr_key_name: pre_state.schnorr_key_name,
         nodes_in_subnet: pre_state.nodes_in_subnet,
+        enable_debug: false,
     };
 
     new_state

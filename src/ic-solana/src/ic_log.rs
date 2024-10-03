@@ -51,7 +51,7 @@ pub struct Log {
     pub entries: Vec<LogEntry>,
 }
 
-pub fn http_request(req: HttpRequest) -> HttpResponse {
+pub fn http_request(req: HttpRequest, enable_debug: bool) -> HttpResponse {
     if req.path() == "/logs" {
         use std::str::FromStr;
         let max_skip_timestamp = match req.raw_query_param("time") {
@@ -91,7 +91,9 @@ pub fn http_request(req: HttpRequest) -> HttpResponse {
         };
 
         let mut entries: Log = Default::default();
-        merge_log(&mut entries, &DEBUG_BUF, Priority::DEBUG);
+        if enable_debug {
+            merge_log(&mut entries, &DEBUG_BUF, Priority::DEBUG);
+        }
         merge_log(&mut entries, &INFO_BUF, Priority::INFO);
         merge_log(&mut entries, &WARNING_BUF, Priority::WARNING);
         merge_log(&mut entries, &ERROR_BUF, Priority::ERROR);
