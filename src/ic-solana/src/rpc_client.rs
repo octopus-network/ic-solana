@@ -3,10 +3,12 @@ use crate::ic_log::DEBUG;
 use crate::request::RpcRequest;
 use crate::response::{
     EncodedConfirmedBlock, OptionalContext, Response, RpcBlockhash,
-    RpcConfirmedTransactionStatusWithSignature, RpcKeyedAccount, RpcSupply, RpcVersionInfo,
+    RpcConfirmedTransactionStatusWithSignature, RpcKeyedAccount, RpcSimulateTransactionResult,
+    RpcSupply, RpcVersionInfo,
 };
 use crate::types::{
-    Account, BlockHash, CommitmentConfig, RpcTransactionConfig, Slot, UiAccount, UiTokenAmount,
+    Account, BlockHash, CommitmentConfig, RpcSimulateTransactionConfig, RpcTransactionConfig, Slot,
+    UiAccount, UiTokenAmount,
 };
 use crate::types::{
     Cluster, EncodedConfirmedTransactionWithStatusMeta, EpochInfo, Pubkey, RpcAccountInfoConfig,
@@ -169,10 +171,10 @@ impl RpcClient {
             });
         }
         // add sol.nownodes.io key
-        headers.push(HttpHeader {
-            name: "api-key".to_string(),
-            value: "c358082d-9e68-43da-a0fb-6f7240d01136".to_string(),
-        });
+        // headers.push(HttpHeader {
+        //     name: "api-key".to_string(),
+        //     value: "c358082d-9e68-43da-a0fb-6f7240d01136".to_string(),
+        // });
 
         log!(
             DEBUG,
@@ -841,5 +843,271 @@ impl RpcClient {
         } else {
             Ok(json_response.result.unwrap().parse_value())
         }
+    }
+
+    ///
+    /// Submits a signed transaction to the cluster for processing.
+
+    ///
+    /// Method relies on the `sendTransaction` RPC call to send the transaction:
+    ///   https://solana.com/docs/rpc/http/sendTransaction
+    ///
+    pub async fn simulate_transaction(
+        &self,
+        tx: Transaction,
+        config: RpcSimulateTransactionConfig,
+        forward: Option<String>,
+    ) -> RpcResult<Option<u64>> {
+        let serialized = tx.serialize();
+
+        let raw_tx = match config.encoding {
+            None | Some(UiTransactionEncoding::Base58) => bs58::encode(serialized).into_string(),
+            Some(UiTransactionEncoding::Base64) => BASE64_STANDARD.encode(serialized),
+            Some(e) => {
+                return Err(RpcError::Text(format!(
+                    "Unsupported encoding: {e}. Supported encodings: base58, base64"
+                )));
+            }
+        };
+
+        let payload = RpcRequest::SimulateTransaction
+            .build_request_json(self.next_request_id(), json!([raw_tx, config]))
+            .to_string();
+
+        let response = self
+            .call(forward, &payload, TX_MEMO_RESP_SIZE_ESTIMATE, None)
+            .await?;
+
+        log!(
+            DEBUG,
+            "[ic-solana] simulate_transaction response: {}",
+            response
+        );
+        let json_response = serde_json::from_str::<
+            JsonRpcResponse<Response<Option<RpcSimulateTransactionResult>>>,
+        >(&response)?;
+
+        log!(
+            DEBUG,
+            "[ic-solana] simulate_transaction json_response: {:?}",
+            json_response
+        );
+        if let Some(e) = json_response.error {
+            Err(e.into())
+        } else {
+            log!(
+                DEBUG,
+                "[ic-solana] simulate_transaction json_response.result: {:?}",
+                json_response.result
+            );
+            let sim_result = json_response.result.unwrap().value.unwrap();
+            if let Some(err) = sim_result.err {
+                return Err(RpcError::Text(err.to_string()));
+            }
+            // Otherwise, we can get the compute units from the simulation result
+            let units = sim_result
+                .units_consumed
+                .map(|units| (units as f64 * 1.20) as u64);
+            log!(
+                DEBUG,
+                "[ic-solana] simulate_transaction units_consumed: {:?}",
+                units
+            );
+            Ok(units)
+        }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_get_compute_units_4_create_mint() {
+        let json_data = r#"
+        {
+            "jsonrpc": "2.0",
+            "result": {
+                "context": {
+                    "apiVersion": "2.0.13",
+                    "slot": 334359643
+                },
+                "value": {
+                    "accounts": null,
+                    "err": null,
+                    "innerInstructions": null,
+                    "logs": [
+                        "Program metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s invoke [1]",
+                        "Program log: IX: Create",
+                        "Program 11111111111111111111111111111111 invoke [2]",
+                        "Program 11111111111111111111111111111111 success",
+                        "Program 11111111111111111111111111111111 invoke [2]",
+                        "Program 11111111111111111111111111111111 success",
+                        "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA invoke [2]",
+                        "Program log: Instruction: InitializeMint2",
+                        "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA consumed 2828 of 180914 compute units",
+                        "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA success",
+                        "Program log: Allocate space for the account",
+                        "Program 11111111111111111111111111111111 invoke [2]",
+                        "Program 11111111111111111111111111111111 success",
+                        "Program log: Assign the account to the owning program",
+                        "Program 11111111111111111111111111111111 invoke [2]",
+                        "Program 11111111111111111111111111111111 success",
+                        "Program metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s consumed 54137 of 200000 compute units",
+                        "Program metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s success"
+                    ],
+                    "replacementBlockhash": {
+                        "blockhash": "AhckRh63HXBN6e1RK7h924vJSQzbsZJL2HVQTxMNF2KA",
+                        "lastValidBlockHeight": 322564880
+                    },
+                    "returnData": null,
+                    "unitsConsumed": 54137
+                }
+            },
+            "id": 0
+        }
+        "#;
+
+        let json_response = serde_json::from_str::<
+            JsonRpcResponse<Response<Option<RpcSimulateTransactionResult>>>,
+        >(&json_data)
+        .expect("Failed to parse JSON");
+
+        println!("json_response: {:#?}", json_response);
+    }
+
+    #[test]
+    fn test_get_compute_units_4_create_ata() {
+        let json_data = r#"
+       {
+            "jsonrpc": "2.0",
+            "result": {
+                "context": {
+                    "apiVersion": "2.0.13",
+                    "slot": 334353176
+                },
+                "value": {
+                    "accounts": null,
+                    "err": null,
+                    "innerInstructions": null,
+                    "logs": [
+                        "Program ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL invoke [1]",
+                        "Program log: Create",
+                        "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA invoke [2]",
+                        "Program log: Instruction: GetAccountDataSize",
+                        "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA consumed 1622 of 193025 compute units",
+                        "Program return: TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA pQAAAAAAAAA=",
+                        "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA success",
+                        "Program 11111111111111111111111111111111 invoke [2]",
+                        "Program 11111111111111111111111111111111 success",
+                        "Program log: Initialize the associated token account",
+                        "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA invoke [2]",
+                        "Program log: Instruction: InitializeImmutableOwner",
+                        "Program log: Please upgrade to SPL Token 2022 for immutable owner support",
+                        "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA consumed 1405 of 186385 compute units",
+                        "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA success",
+                        "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA invoke [2]",
+                        "Program log: Instruction: InitializeAccount3",
+                        "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA consumed 4241 of 182501 compute units",
+                        "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA success",
+                        "Program ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL consumed 22044 of 200000 compute units",
+                        "Program ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL success"
+                    ],
+                    "replacementBlockhash": {
+                        "blockhash": "B2JfaBryMAf9iuJG5rdjvJTAHYMtgeNDR3xv3pTdrknQ",
+                        "lastValidBlockHeight": 322558422
+                    },
+                    "returnData": null,
+                    "unitsConsumed": 22044
+                }
+            },
+            "id": 2
+        }
+        "#;
+
+        let json_response = serde_json::from_str::<
+            JsonRpcResponse<Response<Option<RpcSimulateTransactionResult>>>,
+        >(&json_data)
+        .expect("Failed to parse JSON");
+
+        println!("json_response: {:#?}", json_response);
+    }
+
+    #[test]
+    fn test_get_compute_units_4_mint_to() {
+        let json_data = r#"
+        {
+            "jsonrpc": "2.0",
+            "result": {
+                "context": {
+                    "apiVersion": "2.0.13",
+                    "slot": 334357572
+                },
+                "value": {
+                    "accounts": null,
+                    "err": null,
+                    "innerInstructions": null,
+                    "logs": [
+                        "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA invoke [1]",
+                        "Program log: Instruction: MintTo",
+                        "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA consumed 4537 of 200000 compute units",
+                        "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA success"
+                    ],
+                    "replacementBlockhash": {
+                        "blockhash": "A7owRqh6GfLGxvJVPNVso1h12KNaK57NgtgVoxZQ3gRm",
+                        "lastValidBlockHeight": 322562809
+                    },
+                    "returnData": null,
+                    "unitsConsumed": 4537
+                }
+            },
+            "id": 1
+        }
+        "#;
+
+        let json_response = serde_json::from_str::<
+            JsonRpcResponse<Response<Option<RpcSimulateTransactionResult>>>,
+        >(&json_data)
+        .expect("Failed to parse JSON");
+
+        println!("json_response: {:#?}", json_response);
+    }
+
+    #[test]
+    fn test_get_compute_units_4_transfer() {
+        let json_data = r#"
+        {
+            "jsonrpc": "2.0",
+            "result": {
+                "context": {
+                    "apiVersion": "2.0.13",
+                    "slot": 334350609
+                },
+                "value": {
+                    "accounts": null,
+                    "err": null,
+                    "innerInstructions": null,
+                    "logs": [
+                        "Program 11111111111111111111111111111111 invoke [1]",
+                        "Program 11111111111111111111111111111111 success"
+                    ],
+                    "replacementBlockhash": {
+                        "blockhash": "6Do2geaLv6ZoMPRa1PKDKcGzRKnfvCJAPbTS9RBXL8kq",
+                        "lastValidBlockHeight": 322555859
+                    },
+                    "returnData": null,
+                    "unitsConsumed": 150
+                }
+            },
+            "id": 1
+        }
+        "#;
+
+        let json_response = serde_json::from_str::<
+            JsonRpcResponse<Response<Option<RpcSimulateTransactionResult>>>,
+        >(&json_data)
+        .expect("Failed to parse JSON");
+
+        println!("json_response: {:#?}", json_response);
     }
 }

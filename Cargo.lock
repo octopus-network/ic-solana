@@ -1706,6 +1706,7 @@ dependencies = [
  "k256",
  "num-derive",
  "num-traits",
+ "num_enum",
  "serde",
  "serde-big-array",
  "serde_bytes",

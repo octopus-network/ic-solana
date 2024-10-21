@@ -51,72 +51,68 @@ pub struct Log {
     pub entries: Vec<LogEntry>,
 }
 
-pub fn http_request(req: HttpRequest, enable_debug: bool) -> HttpResponse {
-    if req.path() == "/logs" {
-        use std::str::FromStr;
-        let max_skip_timestamp = match req.raw_query_param("time") {
-            Some(arg) => match u64::from_str(arg) {
-                Ok(value) => value,
-                Err(_) => {
-                    return HttpResponseBuilder::bad_request()
-                        .with_body_and_content_length("failed to parse the 'time' parameter")
-                        .build()
-                }
-            },
-            None => 0,
-        };
+pub fn http_log(req: HttpRequest, enable_debug: bool) -> HttpResponse {
+    use std::str::FromStr;
+    let max_skip_timestamp = match req.raw_query_param("time") {
+        Some(arg) => match u64::from_str(arg) {
+            Ok(value) => value,
+            Err(_) => {
+                return HttpResponseBuilder::bad_request()
+                    .with_body_and_content_length("failed to parse the 'time' parameter")
+                    .build()
+            }
+        },
+        None => 0,
+    };
 
-        let limit = match req.raw_query_param("limit") {
-            Some(arg) => match u64::from_str(arg) {
-                Ok(value) => value,
-                Err(_) => {
-                    return HttpResponseBuilder::bad_request()
-                        .with_body_and_content_length("failed to parse the 'time' parameter")
-                        .build()
-                }
-            },
-            None => 1000,
-        };
+    let limit = match req.raw_query_param("limit") {
+        Some(arg) => match u64::from_str(arg) {
+            Ok(value) => value,
+            Err(_) => {
+                return HttpResponseBuilder::bad_request()
+                    .with_body_and_content_length("failed to parse the 'time' parameter")
+                    .build()
+            }
+        },
+        None => 1000,
+    };
 
-        let offset = match req.raw_query_param("offset") {
-            Some(arg) => match u64::from_str(arg) {
-                Ok(value) => value,
-                Err(_) => {
-                    return HttpResponseBuilder::bad_request()
-                        .with_body_and_content_length("failed to parse the 'time' parameter")
-                        .build()
-                }
-            },
-            None => 0,
-        };
+    let offset = match req.raw_query_param("offset") {
+        Some(arg) => match u64::from_str(arg) {
+            Ok(value) => value,
+            Err(_) => {
+                return HttpResponseBuilder::bad_request()
+                    .with_body_and_content_length("failed to parse the 'time' parameter")
+                    .build()
+            }
+        },
+        None => 0,
+    };
 
-        let mut entries: Log = Default::default();
-        if enable_debug {
-            merge_log(&mut entries, &DEBUG_BUF, Priority::DEBUG);
-        }
-        merge_log(&mut entries, &INFO_BUF, Priority::INFO);
-        merge_log(&mut entries, &WARNING_BUF, Priority::WARNING);
-        merge_log(&mut entries, &ERROR_BUF, Priority::ERROR);
-        merge_log(&mut entries, &CRITICAL_BUF, Priority::CRITICAL);
-        entries
-            .entries
-            .retain(|entry| entry.timestamp >= max_skip_timestamp);
-        entries
-            .entries
-            .sort_by(|a, b| a.timestamp.cmp(&b.timestamp));
-        let logs = entries
-            .entries
-            .into_iter()
-            .skip(offset as usize)
-            .take(limit as usize)
-            .collect::<Vec<_>>();
-        HttpResponseBuilder::ok()
-            .header("Content-Type", "application/json; charset=utf-8")
-            .with_body_and_content_length(serde_json::to_string(&logs).unwrap_or_default())
-            .build()
-    } else {
-        HttpResponseBuilder::not_found().build()
+    let mut entries: Log = Default::default();
+    if enable_debug {
+        merge_log(&mut entries, &DEBUG_BUF, Priority::DEBUG);
     }
+    merge_log(&mut entries, &INFO_BUF, Priority::INFO);
+    merge_log(&mut entries, &WARNING_BUF, Priority::WARNING);
+    merge_log(&mut entries, &ERROR_BUF, Priority::ERROR);
+    merge_log(&mut entries, &CRITICAL_BUF, Priority::CRITICAL);
+    entries
+        .entries
+        .retain(|entry| entry.timestamp >= max_skip_timestamp);
+    entries
+        .entries
+        .sort_by(|a, b| a.timestamp.cmp(&b.timestamp));
+    let logs = entries
+        .entries
+        .into_iter()
+        .skip(offset as usize)
+        .take(limit as usize)
+        .collect::<Vec<_>>();
+    HttpResponseBuilder::ok()
+        .header("Content-Type", "application/json; charset=utf-8")
+        .with_body_and_content_length(serde_json::to_string(&logs).unwrap_or_default())
+        .build()
 }
 
 fn merge_log(entries: &mut Log, buffer: &'static GlobalBuffer, priority: Priority) {

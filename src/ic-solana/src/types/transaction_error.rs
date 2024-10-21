@@ -1,6 +1,6 @@
+use crate::types::InstructionError;
 use candid::{CandidType, Deserialize};
 use serde::Serialize;
-
 /// Reasons a transaction might be rejected.
 #[derive(thiserror::Error, Serialize, Deserialize, Debug, PartialEq, Eq, Clone, CandidType)]
 pub enum TransactionError {
@@ -44,7 +44,7 @@ pub enum TransactionError {
     /// An error occurred while processing an instruction. The first element of the tuple
     /// indicates the instruction index in which the error occurred.
     #[error("Error processing Instruction {0}: {1}")]
-    InstructionError(u8, String),
+    InstructionError(u8, InstructionError),
 
     /// Loader call chain is too deep
     #[error("Loader call chain is too deep")]

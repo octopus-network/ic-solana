@@ -1,3 +1,10 @@
+type Result = variant { Ok : opt nat64; Err : RpcError };
+type RpcError = variant {
+  Text : text;
+  ParseError : text;
+  RpcResponseError : record { code : int64; data : opt text; message : text };
+  RpcRequestError : text;
+};
 type TokenInfo = record {
   uri : text;
   decimals : nat8;
@@ -6,13 +13,21 @@ type TokenInfo = record {
   symbol : text;
 };
 service : (text) -> {
-  create_associated_token_account : (text, text, text) -> (text);
   create_ata : (text, text) -> (text);
-  create_token : () -> (text);
-  create_token_with_metadata : (TokenInfo) -> (text);
+  create_ata22 : (text, text) -> (text);
+  create_ata22_with_payer : (text, text, text) -> (text);
+  create_token22 : () -> (text);
+  create_token22_with_metadata : (TokenInfo) -> (text);
+  create_token_with_metaplex : (TokenInfo) -> (text);
+  get_compute_units_4_create_ata : (text, text) -> (Result);
+  get_compute_units_4_create_mint : (TokenInfo) -> (Result);
+  get_compute_units_4_mint_to : (text, nat64, text) -> (Result);
+  get_compute_units_4_transfer : (text, nat64) -> (Result);
   get_payer : () -> (text);
+  mint22_to : (text, nat64, text) -> (text);
   mint_to : (text, nat64, text) -> (text);
   query_transaction : (text, text) -> (text);
   transfer_to : (text, nat64) -> (text);
-  update_token_metadata : (text, TokenInfo) -> (text);
+  update_token22_metadata : (text, TokenInfo) -> (text);
+  update_token_with_metaplex : (text, TokenInfo) -> (text);
 }

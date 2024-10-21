@@ -39,4 +39,5 @@ ed25519-dalek = "2.1"
 ic-management-canister-types = { workspace = true }
 time = "0.3.36"
 serde_derive = "1.0.208"
+num_enum = "0.7.2"
 # uuid = { workspace = true }

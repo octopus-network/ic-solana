@@ -2,7 +2,7 @@ use crate::types::SendTransactionRequest;
 use crate::utils::{rpc_client, validate_caller_not_anonymous};
 use eddsa_api::{eddsa_public_key, sign_with_eddsa};
 use ic_canister_log::log;
-use ic_canisters_http_types::{HttpRequest, HttpResponse};
+use ic_canisters_http_types::{HttpRequest, HttpResponse, HttpResponseBuilder};
 use ic_cdk::api::management_canister::http_request::{
     CanisterHttpRequestArgument, HttpHeader, HttpMethod, HttpResponse as TransformedHttpResponse,
     TransformArgs,
@@ -12,10 +12,10 @@ use ic_solana::ic_log::DEBUG;
 use ic_solana::response::{OptionalContext, Response, RpcBlockhash};
 use ic_solana::rpc_client::{JsonRpcResponse, RpcResult};
 use ic_solana::types::{
-    BlockHash, EncodingConfig, Instruction, Message, Pubkey, RpcAccountInfoConfig,
-    RpcContextConfig, RpcSendTransactionConfig, RpcSignatureStatusConfig, RpcTransactionConfig,
-    Signature, Transaction, TransactionStatus, UiAccount, UiAccountEncoding, UiTokenAmount,
-    UiTransactionEncoding,
+    BlockHash, CommitmentConfig, EncodingConfig, Instruction, Message, Pubkey,
+    RpcAccountInfoConfig, RpcContextConfig, RpcSendTransactionConfig, RpcSignatureStatusConfig,
+    RpcSimulateTransactionConfig, RpcTransactionConfig, Signature, Transaction, TransactionStatus,
+    UiAccount, UiAccountEncoding, UiTokenAmount, UiTransactionEncoding,
 };
 use ic_solana::{http_request_required_cycles, ic_log};
 use ic_stable_structures::writer::Writer;
@@ -450,7 +450,7 @@ pub async fn sol_send_transaction(
         }
     };
 
-    let ixs = &req
+    let ixs: &Vec<Instruction> = &req
         .instructions
         .iter()
         .map(|s| Instruction::from_str(s).unwrap())
@@ -502,6 +502,34 @@ pub async fn send_raw_transaction(
     Ok(signature.to_string())
 }
 
+///
+/// Submits a signed transaction to the cluster for processing.
+///
+#[update(name = "sol_getComputeUnits")]
+pub async fn get_compute_units(
+    raw_signed_transaction: String,
+    forward: Option<String>,
+) -> RpcResult<Option<u64>> {
+    log!(
+        DEBUG,
+        "[ic-solana-provider] get_compute_units raw_signed_transaction: {:?}",
+        raw_signed_transaction
+    );
+
+    let client = rpc_client();
+    let config = RpcSimulateTransactionConfig {
+        sig_verify: false,
+        replace_recent_blockhash: true,
+        commitment: Some(CommitmentConfig::confirmed()),
+        encoding: Some(UiTransactionEncoding::Base64),
+        ..Default::default()
+    };
+
+    let tx = Transaction::from_str(&raw_signed_transaction).expect("Invalid transaction");
+
+    client.simulate_transaction(tx, config, forward).await
+}
+
 /// Cleans up the HTTP response headers to make them deterministic.
 ///
 /// # Arguments
@@ -547,8 +575,12 @@ fn http_request(req: HttpRequest) -> HttpResponse {
     if ic_cdk::api::data_certificate().is_none() {
         ic_cdk::trap("update call rejected");
     }
-    let enable_debug = read_state(|s| s.enable_debug);
-    ic_log::http_request(req, enable_debug)
+    if req.path() == "/logs" {
+        let endable_debug = read_state(|s| s.enable_debug);
+        ic_log::http_log(req, endable_debug)
+    } else {
+        HttpResponseBuilder::not_found().build()
+    }
 }
 
 #[ic_cdk::init]

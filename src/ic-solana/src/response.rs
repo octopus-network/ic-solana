@@ -1,10 +1,11 @@
+use crate::types::UiInnerInstructions;
+use crate::types::UiTransactionReturnData;
 use crate::types::{
     EncodedTransactionWithStatusMeta, FeeCalculator, Rewards, Slot, TransactionConfirmationStatus,
     TransactionError, UiAccount, UnixTimestamp,
 };
 use serde::{Deserialize, Serialize};
 use std::fmt;
-
 /// Wrapper for rpc return types of methods that provide responses both with and without context.
 /// The Main purpose of this is to fix methods that lack context information in their return type,
 /// without breaking backwards compatibility.
@@ -89,6 +90,18 @@ pub struct Fees {
 #[serde(rename_all = "camelCase")]
 pub struct RpcFeeCalculator {
     pub fee_calculator: FeeCalculator,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct RpcSimulateTransactionResult {
+    pub err: Option<TransactionError>,
+    pub logs: Option<Vec<String>>,
+    pub accounts: Option<Vec<Option<UiAccount>>>,
+    pub units_consumed: Option<u64>,
+    pub return_data: Option<UiTransactionReturnData>,
+    pub inner_instructions: Option<Vec<UiInnerInstructions>>,
+    pub replacement_blockhash: Option<RpcBlockhash>,
 }
 
 // #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]

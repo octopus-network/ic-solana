@@ -8,3 +8,74 @@ dfx canister call ic-solana-provider sol_getAccountInfo '("GeDhDhMT8Cw4hi1vJyRtU
 dfx canister call ic-solana-provider sol_getTransaction '("1zhKkhptmaKR83DMbn7FuBRZM2mHGgLSFEuAGoocET5wPywH4gy3FktfT8dL3FV4LJct86pBTsTTANv5NvNTAEN")'
 
 #dfx canister call ic-solana-provider sol_sendTransaction '( record { instructuons: } )'
+# test canister
+dfx canister call test_canister create_token_with_metaplex '()'
+dfx canister call test_canister create_ata '("3gghk7mHWtFsJcg6EZGK7sbHj3qW6ExUdZLs9q8GRjia","942bM35qY1Ft4Y9F8viykXsGz9EvgGXFeRfJh2FAbXT6")'
+dfx canister call test_canister mint_to '("3gghk7mHWtFsJcg6EZGK7sbHj3qW6ExUdZLs9q8GRjia",5000,"942bM35qY1Ft4Y9F8viykXsGz9EvgGXFeRfJh2FAbXT6")'
+
+TOKEN_MINT="942bM35qY1Ft4Y9F8viykXsGz9EvgGXFeRfJh2FAbXT6"
+TOKEN_ID="Runes•Omnity•Bitcion"
+TOKEN_NAME="Runes•Omnity•Bitcion"
+TOKEN_SYMBOL="RUNES.OT"
+DECIMALS=2
+URI="https://arweave.net/Gtc9N4wdDAo6L95n9bkyx1FHhm15wRrM90c8kGhPx0U"
+dfx canister call test_canister update_token_with_metaplex "(\"${TOKEN_MINT}\",
+    record { token_id = \"${TOKEN_ID}\"; 
+             name = \"${TOKEN_NAME}\";
+             symbol = \"${TOKEN_SYMBOL}\"; 
+             decimals = ${DECIMALS};
+             uri = \"${URI}\"; 
+         }
+    )"
+
+
+TOKEN_ID="RUNES•X•BITCOIN"
+TOKEN_NAME="RUNES•X•BITCOIN"
+TOKEN_SYMBOL="X"
+DECIMALS=0
+URI="https://arweave.net/iLV2-ApjrXPDNoHldzB4a0fVVL-0hXR6dZGgudknz7c"
+dfx canister call test_canister create_token_with_metaplex "(
+    record { token_id = \"${TOKEN_ID}\"; 
+             name = \"${TOKEN_NAME}\";
+             symbol = \"${TOKEN_SYMBOL}\"; 
+             decimals = ${DECIMALS};
+             uri = \"${URI}\"; 
+         }
+    )"
+
+TOKEN_MINT="DVT5QMPUJf4gDVWNXZQKH2ibx4RY73v956uP4o3f81ca"
+WALLET_ADDRESS="3gghk7mHWtFsJcg6EZGK7sbHj3qW6ExUdZLs9q8GRjia"
+dfx canister call test_canister create_ata "(\"${WALLET_ADDRESS}\",\"${TOKEN_MINT}\")"
+
+AMOUNT=5000
+dfx canister call test_canister mint_to "(\"${WALLET_ADDRESS}\",${AMOUNT},\"${TOKEN_MINT}\")"
+
+
+## test for get compute units
+TOKEN_ID="RUNES•X•OT•BITCOIN"
+TOKEN_NAME="RUNES•X•OT•BITCOIN"
+TOKEN_SYMBOL="X.OT"
+DECIMALS=0
+URI="https://arweave.net/iLV2-ApjrXPDNoHldzB4a0fVVL-0hXR6dZGgudknz7c"
+dfx canister call test_canister get_compute_units_4_create_mint "(
+    record { token_id = \"${TOKEN_ID}\"; 
+             name = \"${TOKEN_NAME}\";
+             symbol = \"${TOKEN_SYMBOL}\"; 
+             decimals = ${DECIMALS};
+             uri = \"${URI}\"; 
+         }
+)"
+
+
+TOKEN_MINT="942bM35qY1Ft4Y9F8viykXsGz9EvgGXFeRfJh2FAbXT6"
+WALLET_ADDRESS="FDR2mUpiHKFonnwbUujLyhuNTt7LHEjZ1hDFX4UuCngt"
+dfx canister call test_canister get_compute_units_4_create_ata "(\"${WALLET_ADDRESS}\",\"${TOKEN_MINT}\")"
+
+
+TOKEN_MINT="DVT5QMPUJf4gDVWNXZQKH2ibx4RY73v956uP4o3f81ca"
+WALLET_ADDRESS="3gghk7mHWtFsJcg6EZGK7sbHj3qW6ExUdZLs9q8GRjia"
+dfx canister call test_canister get_compute_units_4_mint_to "(\"${WALLET_ADDRESS}\",${AMOUNT},\"${TOKEN_MINT}\")"
+
+
+WALLET_ADDRESS="FDR2mUpiHKFonnwbUujLyhuNTt7LHEjZ1hDFX4UuCngt"
+dfx canister call test_canister get_compute_units_4_transfer "(\"${WALLET_ADDRESS}\",5000)"

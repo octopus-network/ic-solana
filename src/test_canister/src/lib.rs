@@ -1,12 +1,14 @@
 use candid::Principal;
 
+use ic_solana::metaplex::create_fungible_ix::create_fungible_ix;
+
 use serde_bytes::ByteBuf;
 
 use std::cell::RefCell;
 use std::str::FromStr;
 
 use ic_cdk::update;
-
+use ic_solana::metaplex::types::FungibleFields;
 use ic_solana::token::{SolanaClient, TokenInfo};
 use ic_solana::types::Pubkey;
 pub mod extension;
@@ -14,12 +16,17 @@ pub mod instruction_error;
 pub mod program_error;
 pub mod program_option;
 pub mod serialization;
-pub mod system_instruction;
+// pub mod system_instruction;
+use ic_solana::token::system_instruction;
 pub mod token_error;
-pub mod token_instruction;
+use ic_solana::token::associated_account::create_associated_token_account;
 use ic_solana::token::associated_account::get_associated_token_address_with_program_id;
-use ic_solana::token::constants::token22_program_id;
+use ic_solana::token::constants::{token22_program_id, token_program_id};
+use ic_solana::token::token_instruction;
 mod utils;
+use ic_solana::metaplex::create_fungible_ix::CreateFungibleArgs;
+use ic_solana::rpc_client::RpcError;
+use ic_solana::rpc_client::RpcResult;
 
 thread_local! {
     static SOL_PROVIDER_CANISTER: RefCell<Option<Principal>>  = const { RefCell::new(None) };
@@ -45,7 +52,7 @@ async fn query_transaction(payer: String, tx_hash: String) -> String {
         sol_canister_id: sol_canister_id(),
         payer: Pubkey::from_str(payer.as_str()).unwrap(),
         payer_derive_path: vec![ByteBuf::from("custom_payer")],
-        chainkey_name: "test_key_1".to_string(),
+        chainkey_name: "dfx_test_key".to_string(),
         forward: None,
     };
     let r = s.query_transaction(tx_hash, None).await.unwrap();
@@ -55,116 +62,204 @@ async fn query_transaction(payer: String, tx_hash: String) -> String {
 #[update]
 async fn get_payer() -> String {
     let c =
-        SolanaClient::derive_account("test_key_1".to_string(), "custom_payer".to_string()).await;
+        SolanaClient::derive_account("dfx_test_key".to_string(), "custom_payer".to_string()).await;
     c.to_string()
 }
 
 #[update]
-async fn create_token() -> String {
+async fn create_token_with_metaplex(token_info: TokenInfo) -> String {
     let c =
-        SolanaClient::derive_account("test_key_1".to_string(), "custom_payer".to_string()).await;
+        SolanaClient::derive_account("dfx_test_key".to_string(), "custom_payer".to_string()).await;
     let s = SolanaClient {
         sol_canister_id: sol_canister_id(),
         payer: c,
         payer_derive_path: vec![ByteBuf::from("custom_payer")],
-        chainkey_name: "test_key_1".to_string(),
-        forward: None,
-    };
-    let token_info = TokenInfo {
-        token_id: "YHTX".to_string(),
-        name: "YHTX".to_string(),
-        symbol: "YHTX".to_string(),
-        decimals: 2,
-        uri: "".to_string(),
-    };
-    let r = s.create_mint(token_info).await.unwrap();
-    r.to_string()
-}
-
-#[update]
-async fn create_token_with_metadata(token_info: TokenInfo) -> String {
-    let c =
-        SolanaClient::derive_account("test_key_1".to_string(), "custom_payer".to_string()).await;
-    let mint_account =
-        SolanaClient::derive_account("test_key_1".to_string(), token_info.name.to_string()).await;
-    let s = SolanaClient {
-        sol_canister_id: sol_canister_id(),
-        payer: c,
-        payer_derive_path: vec![ByteBuf::from("custom_payer")],
-        chainkey_name: "test_key_1".to_string(),
+        chainkey_name: "dfx_test_key".to_string(),
         forward: None,
     };
     // let token_info = TokenInfo {
-    //     name: "YHTCC".to_string(),
-    //     symbol: "YHTCC".to_string(),
+    //     token_id: "Runes•Omnity•Bitcion".to_string(),
+    //     name: "Runes•Omnity•Bitcion".to_string(),
+    //     symbol: "OT".to_string(),
     //     decimals: 2,
-    //     uri: "".to_string(),
+    //     uri: "https://arweave.net/K8xWOokmNJaCLQwVO2wr0g6SRZajtFsF575a6fGNwrw".to_string(),
     // };
+    let token_mint =
+        SolanaClient::derive_account(s.chainkey_name.clone(), token_info.token_id.to_string())
+            .await;
     let r = s
-        .create_mint_with_metadata(mint_account, token_info)
+        .create_mint_with_metaplex(token_mint, token_info)
         .await
         .unwrap();
     r.to_string()
 }
 
 #[update]
-async fn create_associated_token_account(
-    payer_addr: String,
-    to_account: String,
-    token_mint: String,
-) -> String {
+async fn create_ata(wallet: String, token_mint: String) -> String {
+    let c =
+        SolanaClient::derive_account("dfx_test_key".to_string(), "custom_payer".to_string()).await;
     let s = SolanaClient {
         sol_canister_id: sol_canister_id(),
-        payer: Pubkey::from_str(payer_addr.as_str()).unwrap(),
+        payer: c,
         payer_derive_path: vec![ByteBuf::from("custom_payer")],
-        chainkey_name: "test_key_1".to_string(),
+        chainkey_name: "dfx_test_key".to_string(),
         forward: None,
     };
-    let to_account = Pubkey::from_str(to_account.as_str()).unwrap();
+    let to_account = Pubkey::from_str(wallet.as_str()).unwrap();
     let token_mint = Pubkey::from_str(token_mint.as_str()).unwrap();
 
     let r = s
-        .create_associated_token_account(&to_account, &token_mint)
+        .create_associated_token_account(&to_account, &token_mint, &token_program_id())
         .await
         .unwrap();
     r
 }
 
 #[update]
-async fn create_ata(to_address: String, token_mint: String) -> String {
+async fn mint_to(wallet: String, amount: u64, token_mint: String) -> String {
     let c =
-        SolanaClient::derive_account("test_key_1".to_string(), "custom_payer".to_string()).await;
+        SolanaClient::derive_account("dfx_test_key".to_string(), "custom_payer".to_string()).await;
 
     let s = SolanaClient {
         sol_canister_id: sol_canister_id(),
         payer: c,
         payer_derive_path: vec![ByteBuf::from("custom_payer")],
-        chainkey_name: "test_key_1".to_string(),
+        chainkey_name: "dfx_test_key".to_string(),
         forward: None,
     };
-    let to_addr = Pubkey::from_str(&to_address).unwrap();
-    let token_mint = Pubkey::from_str(&token_mint).unwrap();
+
+    let to_account = Pubkey::from_str(wallet.as_str()).unwrap();
+    let token_mint = Pubkey::from_str(token_mint.as_str()).unwrap();
+
+    let associated_account =
+        get_associated_token_address_with_program_id(&to_account, &token_mint, &token_program_id());
+
     let r = s
-        .create_associated_token_account(&to_addr, &token_mint)
+        .mint_to(associated_account, amount, token_mint, token_program_id())
         .await
         .unwrap();
     r.to_string()
 }
 
 #[update]
-async fn mint_to(to_account: String, amount: u64, token_mint: String) -> String {
+async fn update_token_with_metaplex(token_mint: String, token_info: TokenInfo) -> String {
     let c =
-        SolanaClient::derive_account("test_key_1".to_string(), "custom_payer".to_string()).await;
+        SolanaClient::derive_account("dfx_test_key".to_string(), "custom_payer".to_string()).await;
+
+    let token_mint = Pubkey::from_str(&token_mint).unwrap();
 
     let s = SolanaClient {
         sol_canister_id: sol_canister_id(),
         payer: c,
         payer_derive_path: vec![ByteBuf::from("custom_payer")],
-        chainkey_name: "test_key_1".to_string(),
+        chainkey_name: "dfx_test_key".to_string(),
         forward: None,
     };
 
-    let to_account = Pubkey::from_str(to_account.as_str()).unwrap();
+    let r = s
+        .update_with_metaplex(token_mint, token_info)
+        .await
+        .unwrap();
+    r.to_string()
+}
+
+#[update]
+async fn create_token22() -> String {
+    let c =
+        SolanaClient::derive_account("dfx_test_key".to_string(), "custom_payer".to_string()).await;
+    let s = SolanaClient {
+        sol_canister_id: sol_canister_id(),
+        payer: c,
+        payer_derive_path: vec![ByteBuf::from("custom_payer")],
+        chainkey_name: "dfx_test_key".to_string(),
+        forward: None,
+    };
+    let token_info = TokenInfo {
+        token_id: "Runes•Omnity•Bitcion".to_string(),
+        name: "Runes•Omnity•Bitcion".to_string(),
+        symbol: "OT".to_string(),
+        decimals: 2,
+        uri: "".to_string(),
+    };
+    let r = s.create_mint22(token_info).await.unwrap();
+    r.to_string()
+}
+
+#[update]
+async fn create_token22_with_metadata(token_info: TokenInfo) -> String {
+    let c =
+        SolanaClient::derive_account("dfx_test_key".to_string(), "custom_payer".to_string()).await;
+    let mint_account =
+        SolanaClient::derive_account("dfx_test_key".to_string(), token_info.name.to_string()).await;
+    let s = SolanaClient {
+        sol_canister_id: sol_canister_id(),
+        payer: c,
+        payer_derive_path: vec![ByteBuf::from("custom_payer")],
+        chainkey_name: "dfx_test_key".to_string(),
+        forward: None,
+    };
+
+    let r = s
+        .create_mint22_with_metadata(mint_account, token_info)
+        .await
+        .unwrap();
+    r.to_string()
+}
+
+#[update]
+async fn create_ata22_with_payer(payer_addr: String, wallet: String, token_mint: String) -> String {
+    let s = SolanaClient {
+        sol_canister_id: sol_canister_id(),
+        payer: Pubkey::from_str(payer_addr.as_str()).unwrap(),
+        payer_derive_path: vec![ByteBuf::from("custom_payer")],
+        chainkey_name: "dfx_test_key".to_string(),
+        forward: None,
+    };
+    let to_account = Pubkey::from_str(wallet.as_str()).unwrap();
+    let token_mint = Pubkey::from_str(token_mint.as_str()).unwrap();
+
+    let r = s
+        .create_associated_token_account(&to_account, &token_mint, &token22_program_id())
+        .await
+        .unwrap();
+    r
+}
+
+#[update]
+async fn create_ata22(wallet: String, token_mint: String) -> String {
+    let c =
+        SolanaClient::derive_account("dfx_test_key".to_string(), "custom_payer".to_string()).await;
+
+    let s = SolanaClient {
+        sol_canister_id: sol_canister_id(),
+        payer: c,
+        payer_derive_path: vec![ByteBuf::from("custom_payer")],
+        chainkey_name: "dfx_test_key".to_string(),
+        forward: None,
+    };
+    let to_addr = Pubkey::from_str(&wallet).unwrap();
+    let token_mint = Pubkey::from_str(&token_mint).unwrap();
+    let r = s
+        .create_associated_token_account(&to_addr, &token_mint, &token22_program_id())
+        .await
+        .unwrap();
+    r.to_string()
+}
+
+#[update]
+async fn mint22_to(wallet: String, amount: u64, token_mint: String) -> String {
+    let c =
+        SolanaClient::derive_account("dfx_test_key".to_string(), "custom_payer".to_string()).await;
+
+    let s = SolanaClient {
+        sol_canister_id: sol_canister_id(),
+        payer: c,
+        payer_derive_path: vec![ByteBuf::from("custom_payer")],
+        chainkey_name: "dfx_test_key".to_string(),
+        forward: None,
+    };
+
+    let to_account = Pubkey::from_str(wallet.as_str()).unwrap();
     let token_mint = Pubkey::from_str(token_mint.as_str()).unwrap();
 
     let associated_account = get_associated_token_address_with_program_id(
@@ -174,16 +269,16 @@ async fn mint_to(to_account: String, amount: u64, token_mint: String) -> String 
     );
 
     let r = s
-        .mint_to(associated_account, amount, token_mint)
+        .mint_to(associated_account, amount, token_mint, token22_program_id())
         .await
         .unwrap();
     r.to_string()
 }
 
 #[update]
-async fn update_token_metadata(token_mint: String, token_info: TokenInfo) -> String {
+async fn update_token22_metadata(token_mint: String, token_info: TokenInfo) -> String {
     let c =
-        SolanaClient::derive_account("test_key_1".to_string(), "custom_payer".to_string()).await;
+        SolanaClient::derive_account("dfx_test_key".to_string(), "custom_payer".to_string()).await;
 
     let token_mint = Pubkey::from_str(&token_mint).unwrap();
 
@@ -191,7 +286,7 @@ async fn update_token_metadata(token_mint: String, token_info: TokenInfo) -> Str
         sol_canister_id: sol_canister_id(),
         payer: c,
         payer_derive_path: vec![ByteBuf::from("custom_payer")],
-        chainkey_name: "test_key_1".to_string(),
+        chainkey_name: "dfx_test_key".to_string(),
         forward: None,
     };
 
@@ -199,30 +294,194 @@ async fn update_token_metadata(token_mint: String, token_info: TokenInfo) -> Str
     r.to_string()
 }
 #[ic_cdk::update]
-async fn transfer_to(to_account: String, amount: u64) -> String {
+async fn transfer_to(wallet: String, amount: u64) -> String {
     let c =
-        SolanaClient::derive_account("test_key_1".to_string(), "custom_payer".to_string()).await;
+        SolanaClient::derive_account("dfx_test_key".to_string(), "custom_payer".to_string()).await;
     let s = SolanaClient {
         sol_canister_id: sol_canister_id(),
         payer: c,
         payer_derive_path: vec![ByteBuf::from("custom_payer")],
-        chainkey_name: "test_key_1".to_string(),
+        chainkey_name: "dfx_test_key".to_string(),
         forward: None,
     };
-    let to_account = Pubkey::from_str(&to_account).unwrap();
+    let to_account = Pubkey::from_str(&wallet).unwrap();
     let response = s.transfer_to(to_account, amount).await;
 
     let signature = response.unwrap();
     ic_cdk::println!("Signature: {:?}", signature);
     signature
 }
+
+#[ic_cdk::update]
+async fn get_compute_units_4_create_mint(token_info: TokenInfo) -> RpcResult<Option<u64>> {
+    let c =
+        SolanaClient::derive_account("dfx_test_key".to_string(), "custom_payer".to_string()).await;
+    let s = SolanaClient {
+        sol_canister_id: sol_canister_id(),
+        payer: c,
+        payer_derive_path: vec![ByteBuf::from("custom_payer")],
+        chainkey_name: "dfx_test_key".to_string(),
+        forward: None,
+    };
+
+    let token_mint =
+        SolanaClient::derive_account(s.chainkey_name.clone(), token_info.token_id.to_string())
+            .await;
+    let metadata = FungibleFields {
+        name: token_info.name,
+        symbol: token_info.symbol,
+        uri: token_info.uri,
+    };
+    let create_arg = CreateFungibleArgs {
+        mint: token_mint,
+        metadata,
+        immutable: false,
+        decimals: token_info.decimals,
+        payer: s.payer.to_owned(),
+    };
+    let instructions = vec![create_fungible_ix(create_arg)];
+
+    let units = s
+        .get_compute_units(
+            instructions.as_slice(),
+            vec![
+                s.payer_derive_path.clone(),
+                vec![ByteBuf::from(token_info.token_id.clone())],
+            ],
+        )
+        .await
+        .map_err(|e| RpcError::Text(e.to_string()))?;
+
+    ic_cdk::println!("get_compute_units for create_fungible_ix : {:?}", units);
+    Ok(units)
+}
+
+#[ic_cdk::update]
+async fn get_compute_units_4_create_ata(
+    wallet: String,
+    token_mint: String,
+) -> RpcResult<Option<u64>> {
+    let c =
+        SolanaClient::derive_account("dfx_test_key".to_string(), "custom_payer".to_string()).await;
+    let s = SolanaClient {
+        sol_canister_id: sol_canister_id(),
+        payer: c,
+        payer_derive_path: vec![ByteBuf::from("custom_payer")],
+        chainkey_name: "dfx_test_key".to_string(),
+        forward: None,
+    };
+    let to_account = Pubkey::from_str(wallet.as_str()).unwrap();
+    let token_mint = Pubkey::from_str(token_mint.as_str()).unwrap();
+
+    let instructions = vec![create_associated_token_account(
+        &s.payer,
+        &to_account,
+        &token_mint,
+        &token_program_id(),
+    )];
+    let units = s
+        .get_compute_units(instructions.as_slice(), vec![s.payer_derive_path.clone()])
+        .await
+        .map_err(|e| RpcError::Text(e.to_string()))?;
+
+    ic_cdk::println!(
+        "get_compute_units for create_associated_token_account : {:?}",
+        units
+    );
+    Ok(units)
+}
+
+#[ic_cdk::update]
+async fn get_compute_units_4_mint_to(
+    wallet: String,
+    amount: u64,
+    token_mint: String,
+) -> RpcResult<Option<u64>> {
+    let c =
+        SolanaClient::derive_account("dfx_test_key".to_string(), "custom_payer".to_string()).await;
+    let s = SolanaClient {
+        sol_canister_id: sol_canister_id(),
+        payer: c,
+        payer_derive_path: vec![ByteBuf::from("custom_payer")],
+        chainkey_name: "dfx_test_key".to_string(),
+        forward: None,
+    };
+
+    let to_account = Pubkey::from_str(wallet.as_str()).unwrap();
+    let token_mint = Pubkey::from_str(token_mint.as_str()).unwrap();
+
+    let associated_account =
+        get_associated_token_address_with_program_id(&to_account, &token_mint, &token_program_id());
+
+    let instructions = vec![token_instruction::mint_to(
+        &token_program_id(),
+        &token_mint,
+        &associated_account,
+        &s.payer,
+        &[],
+        amount,
+    )];
+
+    let units = s
+        .get_compute_units(instructions.as_slice(), vec![s.payer_derive_path.clone()])
+        .await
+        .map_err(|e| RpcError::Text(e.to_string()))?;
+
+    ic_cdk::println!(
+        "get_compute_units for system_instruction::transfer : {:?}",
+        units
+    );
+    Ok(units)
+}
+
+#[ic_cdk::update]
+async fn get_compute_units_4_transfer(wallet: String, amount: u64) -> RpcResult<Option<u64>> {
+    let c =
+        SolanaClient::derive_account("dfx_test_key".to_string(), "custom_payer".to_string()).await;
+    let s = SolanaClient {
+        sol_canister_id: sol_canister_id(),
+        payer: c,
+        payer_derive_path: vec![ByteBuf::from("custom_payer")],
+        chainkey_name: "dfx_test_key".to_string(),
+        forward: None,
+    };
+    let to_account = Pubkey::from_str(&wallet).unwrap();
+    let response: Result<(RpcResult<u64>,), _> = ic_cdk::call(
+        s.sol_canister_id,
+        "sol_getBalance",
+        (to_account.to_string(), s.forward.to_owned()),
+    )
+    .await;
+
+    let lamports = response.unwrap().0?;
+
+    let fee = 10_000;
+
+    if lamports <= amount + fee {
+        ic_cdk::trap("Not enough lamports");
+    }
+
+    let instructions = vec![system_instruction::transfer(&s.payer, &to_account, amount)];
+    let units = s
+        .get_compute_units(instructions.as_slice(), vec![s.payer_derive_path.clone()])
+        .await
+        .map_err(|e| RpcError::Text(e.to_string()))?;
+
+    ic_cdk::println!(
+        "get_compute_units for system_instruction::transfer : {:?}",
+        units
+    );
+    Ok(units)
+}
+
 ic_cdk::export_candid!();
 
 #[cfg(test)]
 mod test {
-    use super::system_instruction::SystemInstruction;
+    // use super::system_instruction::SystemInstruction;
     use bincode::Options;
     use serde_json::{from_str, json, Value};
+    use solana_program::system_instruction::SystemInstruction;
     use spl_token_2022::instruction::TokenInstruction;
     use spl_token_2022::solana_program::{program_option::COption, pubkey::Pubkey};
 

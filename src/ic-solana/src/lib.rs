@@ -1,7 +1,7 @@
 pub(crate) mod constants;
 pub mod eddsa;
 pub mod ic_log;
-
+pub mod metaplex;
 pub mod request;
 pub mod response;
 pub mod rpc_client;

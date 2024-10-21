@@ -6,6 +6,8 @@ use crate::types::signature::Signature;
 use crate::types::transaction_error::TransactionError;
 use crate::types::{BlockHash, CompiledInstruction, Slot, UnixTimestamp};
 use crate::utils::short_vec;
+use base64::prelude::BASE64_STANDARD;
+use base64::Engine;
 use candid::CandidType;
 use ic_crypto_ed25519::PrivateKey;
 use serde::de::Error;
@@ -278,6 +280,40 @@ pub struct InnerInstruction {
     pub instruction: CompiledInstruction,
     /// Invocation stack height of the instruction,
     pub stack_height: Option<u32>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub enum UiReturnDataEncoding {
+    Base64,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct UiTransactionReturnData {
+    pub program_id: String,
+    pub data: (String, UiReturnDataEncoding),
+}
+
+impl Default for UiTransactionReturnData {
+    fn default() -> Self {
+        Self {
+            program_id: String::default(),
+            data: (String::default(), UiReturnDataEncoding::Base64),
+        }
+    }
+}
+
+impl From<TransactionReturnData> for UiTransactionReturnData {
+    fn from(return_data: TransactionReturnData) -> Self {
+        Self {
+            program_id: return_data.program_id.to_string(),
+            data: (
+                BASE64_STANDARD.encode(return_data.data),
+                UiReturnDataEncoding::Base64,
+            ),
+        }
+    }
 }
 
 #[cfg(test)]
