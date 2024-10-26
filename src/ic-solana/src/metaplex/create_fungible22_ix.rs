@@ -92,7 +92,7 @@ pub fn create_fungible_22_ix(args: CreateFungible22Args) -> Vec<Instruction> {
     // Initialize extensions
     if is_metadata {
         let init_metadata_pointer_ix =
-            initialize_metadata_pointer(&args.mint, &args.payer, &args.mint);
+            initialize_metadata_pointer(&args.mint, &args.mint,&args.payer);
         instructions.push(init_metadata_pointer_ix);
     }
 

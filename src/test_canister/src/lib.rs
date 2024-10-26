@@ -24,10 +24,14 @@ use ic_solana::token::associated_account::get_associated_token_address_with_prog
 use ic_solana::token::constants::{token22_program_id, token_program_id};
 use ic_solana::token::token_instruction;
 mod utils;
+use ic_canister_log::log;
+use ic_solana::eddsa::hash_with_sha256;
+use ic_solana::ic_log::DEBUG;
 use ic_solana::metaplex::create_fungible_ix::CreateFungibleArgs;
 use ic_solana::rpc_client::RpcError;
 use ic_solana::rpc_client::RpcResult;
-
+use std::time::Duration;
+pub const DELAY: u64 = 60;
 thread_local! {
     static SOL_PROVIDER_CANISTER: RefCell<Option<Principal>>  = const { RefCell::new(None) };
     // static SCHNORR_CANISTER: RefCell<Option<Principal>> = const { RefCell::new(None)};
@@ -84,14 +88,69 @@ async fn create_token_with_metaplex(token_info: TokenInfo) -> String {
     //     decimals: 2,
     //     uri: "https://arweave.net/K8xWOokmNJaCLQwVO2wr0g6SRZajtFsF575a6fGNwrw".to_string(),
     // };
-    let token_mint =
-        SolanaClient::derive_account(s.chainkey_name.clone(), token_info.token_id.to_string())
-            .await;
+    let derive_path = hash_with_sha256(token_info.token_id.clone().as_str());
+    let token_mint = SolanaClient::derive_account(s.chainkey_name.clone(), derive_path).await;
     let r = s
         .create_mint_with_metaplex(token_mint, token_info)
         .await
         .unwrap();
     r.to_string()
+}
+
+#[update]
+async fn create_token_with_metaplex_delay(token_info: TokenInfo, delay: u64) -> String {
+    let c =
+        SolanaClient::derive_account("dfx_test_key".to_string(), "custom_payer".to_string()).await;
+    let s = SolanaClient {
+        sol_canister_id: sol_canister_id(),
+        payer: c,
+        payer_derive_path: vec![ByteBuf::from("custom_payer")],
+        chainkey_name: "dfx_test_key".to_string(),
+        forward: None,
+    };
+    let derive_path = hash_with_sha256(token_info.token_id.clone().as_str());
+
+    //mock delay
+    let delay = Duration::from_secs(delay);
+    use std::sync::{Arc, Mutex};
+    let token_mint =
+        Arc::new(SolanaClient::derive_account(s.chainkey_name.clone(), derive_path).await);
+    let blockhash = Arc::new(s.get_latest_blockhash().await.unwrap());
+    let ret = Arc::new(Mutex::new(String::default()));
+    let token_mint_clone = Arc::clone(&token_mint);
+    let blockhash_clone = Arc::clone(&blockhash);
+    let ret_clone = Arc::clone(&ret);
+
+    ic_cdk_timers::set_timer(delay, move || {
+        let token_mint = Arc::clone(&token_mint_clone);
+        let blockhash = Arc::clone(&blockhash_clone);
+        let ret = Arc::clone(&ret_clone);
+
+        ic_cdk::spawn(async move {
+            log!(
+                DEBUG,
+                "[solana_client::create_token_with_metaplex_delay] {}s delay  is over !",
+                DELAY
+            );
+            let r = s
+                .test_create_mint_with_metaplex(
+                    *Arc::clone(&token_mint),
+                    token_info.clone(),
+                    *Arc::clone(&blockhash),
+                )
+                .await
+                .unwrap();
+            // let mut ret_lock = ret.lock().unwrap();
+            *ret.lock().unwrap() = r;
+            log!(
+                DEBUG,
+                "[solana_client::create_token_with_metaplex_delay] test_create_mint_with_metaplex resuslt: {:?}",
+                ret
+            );
+        });
+    });
+    let resp = ret.lock().unwrap().clone();
+    resp
 }
 
 #[update]
@@ -158,6 +217,27 @@ async fn update_token_with_metaplex(token_mint: String, token_info: TokenInfo) -
 
     let r = s
         .update_with_metaplex(token_mint, token_info)
+        .await
+        .unwrap();
+    r.to_string()
+}
+
+#[update]
+async fn create_token22_with_metaplex(token_info: TokenInfo) -> String {
+    let c =
+        SolanaClient::derive_account("dfx_test_key".to_string(), "custom_payer".to_string()).await;
+    let s = SolanaClient {
+        sol_canister_id: sol_canister_id(),
+        payer: c,
+        payer_derive_path: vec![ByteBuf::from("custom_payer")],
+        chainkey_name: "dfx_test_key".to_string(),
+        forward: None,
+    };
+
+    let derive_path = hash_with_sha256(token_info.token_id.clone().as_str());
+    let token_mint = SolanaClient::derive_account(s.chainkey_name.clone(), derive_path).await;
+    let r = s
+        .create_mint22_with_metaplex(token_mint, token_info)
         .await
         .unwrap();
     r.to_string()
@@ -290,7 +370,10 @@ async fn update_token22_metadata(token_mint: String, token_info: TokenInfo) -> S
         forward: None,
     };
 
-    let r = s.update_metadata(token_mint, token_info).await.unwrap();
+    let r = s
+        .update_token22_metadata(token_mint, token_info)
+        .await
+        .unwrap();
     r.to_string()
 }
 #[ic_cdk::update]
@@ -310,6 +393,52 @@ async fn transfer_to(wallet: String, amount: u64) -> String {
     let signature = response.unwrap();
     ic_cdk::println!("Signature: {:?}", signature);
     signature
+}
+
+#[update]
+async fn close_mint_account(close_account: String, dest_account: String) -> String {
+    let c =
+        SolanaClient::derive_account("dfx_test_key".to_string(), "custom_payer".to_string()).await;
+
+    let s = SolanaClient {
+        sol_canister_id: sol_canister_id(),
+        payer: c,
+        payer_derive_path: vec![ByteBuf::from("custom_payer")],
+        chainkey_name: "dfx_test_key".to_string(),
+        forward: None,
+    };
+
+    let token_mint = Pubkey::from_str(close_account.as_str()).unwrap();
+    let destination_account = Pubkey::from_str(dest_account.as_str()).unwrap();
+
+    let r = s
+        .close_account(token_program_id(), token_mint, destination_account)
+        .await
+        .unwrap();
+    r.to_string()
+}
+
+#[update]
+async fn freeze_mint_account(freeze_account: String, token_mint: String) -> String {
+    let c =
+        SolanaClient::derive_account("dfx_test_key".to_string(), "custom_payer".to_string()).await;
+
+    let s = SolanaClient {
+        sol_canister_id: sol_canister_id(),
+        payer: c,
+        payer_derive_path: vec![ByteBuf::from("custom_payer")],
+        chainkey_name: "dfx_test_key".to_string(),
+        forward: None,
+    };
+
+    let destination_account = Pubkey::from_str(freeze_account.as_str()).unwrap();
+    let token_mint = Pubkey::from_str(token_mint.as_str()).unwrap();
+
+    let r = s
+        .freeze_account(token_program_id(), token_mint, destination_account)
+        .await
+        .unwrap();
+    r.to_string()
 }
 
 #[ic_cdk::update]

@@ -1,11 +1,11 @@
+use crate::constants::EDDSA_SIGN_COST;
 use candid::Principal;
 use ic_management_canister_types::{
     DerivationPath, SchnorrAlgorithm, SchnorrKeyId, SchnorrPublicKeyArgs, SchnorrPublicKeyResponse,
     SignWithSchnorrArgs, SignWithSchnorrReply,
 };
 use serde_bytes::ByteBuf;
-
-use crate::constants::EDDSA_SIGN_COST;
+use sha2::Digest;
 
 /// Signs a message with an ed25519 key.
 pub async fn sign_with_eddsa(
@@ -50,4 +50,15 @@ pub async fn eddsa_public_key(key_name: String, derivation_path: Vec<ByteBuf>) -
     .await;
 
     res.unwrap().0.public_key
+}
+
+pub fn sha256(input: &[u8]) -> [u8; 32] {
+    let mut hasher = sha2::Sha256::new();
+    hasher.update(input);
+    hasher.finalize().into()
+}
+
+pub fn hash_with_sha256(input: &str) -> String {
+    let value = sha256(input.as_bytes());
+    hex::encode(value)
 }

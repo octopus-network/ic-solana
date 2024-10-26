@@ -1,8 +1,8 @@
 mod option_serializer;
 pub mod short_vec;
-
 use crate::constants::*;
 use ic_cdk::api::management_canister::http_request::CanisterHttpRequestArgument;
+
 
 // pub fn debug_println_caller(method_name: &str) {
 //     ic_cdk::println!(
@@ -70,3 +70,4 @@ pub fn get_http_request_cost(payload_size_bytes: u64, max_response_bytes: u64) -
         + CANISTER_OVERHEAD;
     cost_per_node * nodes_in_subnet
 }
+

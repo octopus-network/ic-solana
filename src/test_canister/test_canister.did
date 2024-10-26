@@ -13,12 +13,16 @@ type TokenInfo = record {
   symbol : text;
 };
 service : (text) -> {
+  close_mint_account : (text, text) -> (text);
   create_ata : (text, text) -> (text);
   create_ata22 : (text, text) -> (text);
   create_ata22_with_payer : (text, text, text) -> (text);
   create_token22 : () -> (text);
   create_token22_with_metadata : (TokenInfo) -> (text);
+  create_token22_with_metaplex : (TokenInfo) -> (text);
   create_token_with_metaplex : (TokenInfo) -> (text);
+  create_token_with_metaplex_delay : (TokenInfo, nat64) -> (text);
+  freeze_mint_account : (text, text) -> (text);
   get_compute_units_4_create_ata : (text, text) -> (Result);
   get_compute_units_4_create_mint : (TokenInfo) -> (Result);
   get_compute_units_4_mint_to : (text, nat64, text) -> (Result);

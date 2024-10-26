@@ -26,7 +26,7 @@ pub struct TokenMetadata {
 impl TokenMetadata {
     /// Gives the total size of this struct as a TLV entry in an account
     pub fn tlv_size_of(&self) -> Result<usize, ProgramError> {
-        0usize
+        10usize
             .checked_add(get_instance_packed_len(self).unwrap())
             .ok_or(ProgramError::InvalidAccountData)
     }

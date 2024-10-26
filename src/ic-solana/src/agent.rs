@@ -1,5 +1,3 @@
-// use crate::constants::DELAY;
-// use std::time::Duration;
 use crate::eddsa::{eddsa_public_key, sign_with_eddsa};
 
 use crate::rpc_client::RpcResult;
@@ -18,16 +16,15 @@ use ic_canister_log::log;
 use serde::{Deserialize, Serialize};
 use serde_bytes::ByteBuf;
 
-use std::str::FromStr;
-use token_metadata::Field;
-pub mod associated_account;
 
-pub mod constants;
-pub mod instruction_error;
-pub mod program_error;
-pub mod system_instruction;
-pub mod token_instruction;
-pub mod token_metadata;
+use crate::token::token_metadata::Field;
+use std::str::FromStr;
+
+
+use crate::token::system_instruction;
+use crate::token::token_instruction;
+use crate::token::token_metadata;
+
 use crate::eddsa::hash_with_sha256;
 use crate::metaplex::create_fungible22_ix::create_fungible_22_ix;
 use crate::metaplex::create_fungible22_ix::CreateFungible22Args;
@@ -39,7 +36,6 @@ use crate::metaplex::create_metadata_ix::create_metadata_ix;
 use crate::metaplex::update_metadata_ix::update_asset_v1_ix;
 use crate::metaplex::update_metadata_ix::UpdateMetaArgs;
 use crate::token::token_instruction::initialize_metadata_pointer;
-use ic_cdk::api;
 
 #[derive(CandidType, Deserialize, Serialize, Clone, Debug, PartialEq, Eq)]
 pub struct TokenInfo {
@@ -80,6 +76,7 @@ impl SolanaClient {
             .0
             .map_err(|e| anyhow!(format!("query transaction rpc error: {:?}", e)))?;
         // let tx = serde_json::from_str(tx.as_str()).unwrap();
+
         Ok(tx)
     }
 
@@ -131,83 +128,6 @@ impl SolanaClient {
         Ok(resp)
     }
 
-    pub async fn test_create_mint_with_metaplex(
-        &self,
-        token_mint: Pubkey,
-        token_info: TokenInfo,
-        blockhash: BlockHash,
-    ) -> anyhow::Result<String> {
-        let metadata = FungibleFields {
-            name: token_info.name,
-            symbol: token_info.symbol,
-            uri: token_info.uri,
-        };
-        let create_arg = CreateFungibleArgs {
-            mint: token_mint,
-            metadata,
-            immutable: false,
-            decimals: token_info.decimals,
-            payer: self.payer.to_owned(),
-        };
-        let instructions = vec![create_fungible_ix(create_arg)];
-        let derive_path = hash_with_sha256(token_info.token_id.clone().as_str());
-
-        // let blockhash = self.get_latest_blockhash().await?;
-
-        log!(
-            DEBUG,
-            "[solana_client::test_create_mint_with_metaplex] get_latest_blockhash : {:?} ",
-            blockhash
-        );
-
-        let message = Message::new_with_blockhash(
-            instructions.iter().as_ref(),
-            Some(&self.payer),
-            &blockhash,
-        );
-        let mut tx = Transaction::new_unsigned(message);
-        let paths = vec![
-            self.payer_derive_path.clone(),
-            vec![ByteBuf::from(derive_path)],
-        ];
-        for i in 0..paths.len() {
-            let signature = self.sign(paths[i].clone(), tx.message_data()).await?;
-            tx.add_signature(i, signature);
-        }
-
-        log!(
-            DEBUG,
-            "[solana_client::test_create_mint_with_metaplex] signed_tx : {:?} and string : {:?}",
-            tx,
-            tx.to_string()
-        );
-
-        let response: Result<(RpcResult<String>,), _> = ic_cdk::call(
-            self.sol_canister_id,
-            "sol_sendRawTransaction",
-            (tx.to_string(), self.forward.to_owned()),
-        )
-        .await;
-        log!(DEBUG, "sol_sendRawTransaction response: {:?}", response);
-        let resp = response
-            .map_err(|e| {
-                anyhow!(format!(
-                    "[solana_client::send_raw_transaction] call send raw transaction err: {:?}",
-                    e
-                ))
-            })?
-            .0
-            .map_err(|e| {
-                anyhow!(format!(
-                    "[solana_client::send_raw_transaction] rpc error: {:?}",
-                    e
-                ))
-            })?;
-        // log!(DEBUG, "sol_sendRawTransaction response: {}", resp);
-
-        Ok(resp)
-    }
-
     pub async fn create_mint_with_metaplex(
         &self,
         token_mint: Pubkey,
@@ -228,7 +148,6 @@ impl SolanaClient {
         };
         let instructions = vec![create_fungible_ix(create_arg)];
         let derive_path = hash_with_sha256(token_info.token_id.clone().as_str());
-
         let tx_hash = self
             .send_raw_transaction(
                 instructions.as_slice(),
@@ -247,7 +166,7 @@ impl SolanaClient {
         token_info: TokenInfo,
         // forward: Option<String>,
     ) -> anyhow::Result<String> {
-        let mint_len = 270u64;
+        let mint_len = 234u64;
         let metadata = TokenMetadata {
             update_authority: OptionalNonZeroPubkey(self.payer.clone()),
             mint: token_mint,
@@ -262,7 +181,7 @@ impl SolanaClient {
             metadata
         );
 
-        let space = metadata.tlv_size_of().unwrap() + mint_len as usize;
+        let space = metadata.tlv_size_of().unwrap() + 238;
         let response: Result<(RpcResult<u64>,), _> = ic_cdk::call(
             self.sol_canister_id,
             "sol_getminimumbalanceforrentexemption",
@@ -299,14 +218,13 @@ impl SolanaClient {
         };
 
         let instructions = create_fungible_22_ix(creat_args);
-        let derive_path = hash_with_sha256(token_info.token_id.clone().as_str());
 
         let tx_hash = self
             .send_raw_transaction(
                 instructions.as_slice(),
                 vec![
                     self.payer_derive_path.clone(),
-                    vec![ByteBuf::from(derive_path)],
+                    vec![ByteBuf::from(token_info.token_id.clone())],
                 ],
             )
             .await?;
@@ -560,13 +478,12 @@ impl SolanaClient {
         Ok(tx_hash)
     }
 
-    pub async fn update_token22_metadata(
+    pub async fn update_metadata(
         &self,
         token_mint: Pubkey,
         token_info: TokenInfo,
         // forward: Option<String>,
     ) -> anyhow::Result<String> {
-        let mint_len = 270u64;
         let metadata = TokenMetadata {
             update_authority: OptionalNonZeroPubkey(self.payer.to_owned()),
             mint: token_mint,
@@ -575,7 +492,7 @@ impl SolanaClient {
             uri: token_info.uri.clone(),
             additional_metadata: vec![],
         };
-        let space = metadata.tlv_size_of().unwrap() + mint_len as usize;
+        let space = metadata.tlv_size_of().unwrap() + 238;
         let response: Result<(RpcResult<u64>,), _> = ic_cdk::call(
             self.sol_canister_id,
             "sol_getminimumbalanceforrentexemption",
@@ -677,17 +594,13 @@ impl SolanaClient {
         paths: Vec<Vec<ByteBuf>>,
         // forward: Option<String>,
     ) -> anyhow::Result<String> {
-        let mut start = api::time();
+        
         let blockhash = self.get_latest_blockhash().await?;
-        let mut end = api::time();
-        let mut elapsed = (end - start) / 1_000_000_000;
-
         log!(
             DEBUG,
-            "[solana_client::send_raw_transaction] get_latest_blockhash : {:?} and time elapsed: {}",
-            blockhash,elapsed
+            "[solana_client::send_raw_transaction] get_latest_blockhash : {:?}",
+            blockhash
         );
-
         let message = Message::new_with_blockhash(
             instructions.iter().as_ref(),
             Some(&self.payer),
@@ -696,15 +609,7 @@ impl SolanaClient {
         let mut tx = Transaction::new_unsigned(message);
 
         for i in 0..paths.len() {
-            start = api::time();
             let signature = self.sign(paths[i].clone(), tx.message_data()).await?;
-            end = api::time();
-            elapsed = (end - start) / 1_000_000_000;
-            log!(
-                DEBUG,
-                "[solana_client::send_raw_transaction] the time elapsed for chainkey signing : {}",
-                elapsed
-            );
             tx.add_signature(i, signature);
         }
 
@@ -715,7 +620,6 @@ impl SolanaClient {
             tx.to_string()
         );
 
-        start = api::time();
         let response: Result<(RpcResult<String>,), _> = ic_cdk::call(
             self.sol_canister_id,
             "sol_sendRawTransaction",
@@ -738,13 +642,7 @@ impl SolanaClient {
                 ))
             })?;
         // log!(DEBUG, "sol_sendRawTransaction response: {}", resp);
-        end = api::time();
-        elapsed = (end - start) / 1_000_000_000;
-        log!(
-            DEBUG,
-            "[solana_client::send_raw_transaction] the time elapsed for sol_sendRawTransaction : {}",
-            elapsed
-        );
+
         Ok(resp)
     }
 

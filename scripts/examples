@@ -13,10 +13,23 @@ dfx canister call test_canister create_token_with_metaplex '()'
 dfx canister call test_canister create_ata '("3gghk7mHWtFsJcg6EZGK7sbHj3qW6ExUdZLs9q8GRjia","942bM35qY1Ft4Y9F8viykXsGz9EvgGXFeRfJh2FAbXT6")'
 dfx canister call test_canister mint_to '("3gghk7mHWtFsJcg6EZGK7sbHj3qW6ExUdZLs9q8GRjia",5000,"942bM35qY1Ft4Y9F8viykXsGz9EvgGXFeRfJh2FAbXT6")'
 
+
+MASTER_KEY=$(solana address)
+echo "current solana cli default address: $MASTER_KEY and balance: $(solana balance $MASTER_KEY)"
+# get signer and init it
+SIGNER=$( dfx canister call test_canister get_payer '()')
+SIGNER=$(echo "$SIGNER" | awk -F'"' '{print $2}')
+echo "current SIGNER: $SIGNER"
+# transfer SOL to init signer
+AMOUNT=0.2
+echo "transfer SOL to $SIGNER from $MASTER_KEY"
+solana transfer $SIGNER $AMOUNT --with-memo init_account --allow-unfunded-recipient
+echo "$SIGNER balance: $(solana balance $SIGNER)"
+
 TOKEN_MINT="942bM35qY1Ft4Y9F8viykXsGz9EvgGXFeRfJh2FAbXT6"
 TOKEN_ID="Runes•Omnity•Bitcion"
 TOKEN_NAME="Runes•Omnity•Bitcion"
-TOKEN_SYMBOL="RUNES.OT"
+TOKEN_SYMBOL="OT"
 DECIMALS=2
 URI="https://arweave.net/Gtc9N4wdDAo6L95n9bkyx1FHhm15wRrM90c8kGhPx0U"
 dfx canister call test_canister update_token_with_metaplex "(\"${TOKEN_MINT}\",
@@ -29,7 +42,7 @@ dfx canister call test_canister update_token_with_metaplex "(\"${TOKEN_MINT}\",
     )"
 
 
-TOKEN_ID="RUNES•X•BITCOIN"
+TOKEN_ID="RUNES•X•BITCOIN202420241845"
 TOKEN_NAME="RUNES•X•BITCOIN"
 TOKEN_SYMBOL="X"
 DECIMALS=0
@@ -79,3 +92,60 @@ dfx canister call test_canister get_compute_units_4_mint_to "(\"${WALLET_ADDRESS
 
 WALLET_ADDRESS="FDR2mUpiHKFonnwbUujLyhuNTt7LHEjZ1hDFX4UuCngt"
 dfx canister call test_canister get_compute_units_4_transfer "(\"${WALLET_ADDRESS}\",5000)"
+
+
+TOKEN_ID="RUNES•X•BITCOIN202420261119"
+TOKEN_NAME="RUNES•X•BITCOIN"
+TOKEN_SYMBOL="X"
+DECIMALS=0
+URI="https://arweave.net/iLV2-ApjrXPDNoHldzB4a0fVVL-0hXR6dZGgudknz7c"
+DELAY=15
+dfx canister call test_canister create_token_with_metaplex_delay "(
+    record { token_id = \"${TOKEN_ID}\"; 
+             name = \"${TOKEN_NAME}\";
+             symbol = \"${TOKEN_SYMBOL}\"; 
+             decimals = ${DECIMALS};
+             uri = \"${URI}\"; 
+         },
+    $DELAY:nat64
+)"
+
+
+
+TOKEN_ID="Runes•Omnity•Bitcion202410261228"
+TOKEN_NAME="Runes•Omnity•Bitcion"
+TOKEN_SYMBOL="OT"
+DECIMALS=2
+URI="https://arweave.net/Gtc9N4wdDAo6L95n9bkyx1FHhm15wRrM90c8kGhPx0U"
+dfx canister call test_canister create_token22_with_metaplex "(
+    record { token_id = \"${TOKEN_ID}\"; 
+             name = \"${TOKEN_NAME}\";
+             symbol = \"${TOKEN_SYMBOL}\"; 
+             decimals = ${DECIMALS};
+             uri = \"${URI}\"; 
+         }
+    )"
+
+TOKEN_MINT="5CWTAPEzwQaqDHrQQFsZy5wh1VBYuuHC3DzJEiuSG8Wu"
+TOKEN_ID="Runes•Omnity•Bitcion"
+TOKEN_NAME="Runes•Omnity•Bitcion"
+TOKEN_SYMBOL="OT"
+DECIMALS=2
+URI="https://arweave.net/K8xWOokmNJaCLQwVO2wr0g6SRZajtFsF575a6fGNwrw"
+dfx canister call test_canister update_token22_metadata "(\"${TOKEN_MINT}\",
+    record { token_id = \"${TOKEN_ID}\"; 
+             name = \"${TOKEN_NAME}\";
+             symbol = \"${TOKEN_SYMBOL}\"; 
+             decimals = ${DECIMALS};
+             uri = \"${URI}\"; 
+         }
+    )"
+
+
+TOKEN_MINT="5CWTAPEzwQaqDHrQQFsZy5wh1VBYuuHC3DzJEiuSG8Wu"
+WALLET_ADDRESS="3gghk7mHWtFsJcg6EZGK7sbHj3qW6ExUdZLs9q8GRjia"
+dfx canister call test_canister create_ata22 "(\"${WALLET_ADDRESS}\",\"${TOKEN_MINT}\")"
+
+
+AMOUNT=5000000
+dfx canister call test_canister mint22_to "(\"${WALLET_ADDRESS}\",${AMOUNT},\"${TOKEN_MINT}\")"

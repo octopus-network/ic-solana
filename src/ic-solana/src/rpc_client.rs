@@ -1,5 +1,6 @@
 use crate::constants::*;
-use crate::ic_log::DEBUG;
+use crate::eddsa::hash_with_sha256;
+use crate::ic_log::{DEBUG, ERROR};
 use crate::request::RpcRequest;
 use crate::response::{
     EncodedConfirmedBlock, OptionalContext, Response, RpcBlockhash,
@@ -22,13 +23,13 @@ use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
 use candid::CandidType;
 use ic_canister_log::log;
+use ic_cdk::api;
 use ic_cdk::api::management_canister::http_request::{
     http_request, CanisterHttpRequestArgument, HttpHeader, HttpMethod, TransformContext,
 };
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::{json, Value};
-use sha2::Digest;
 use std::cell::RefCell;
 use std::str::FromStr;
 
@@ -84,13 +85,6 @@ impl From<serde_json::Error> for RpcError {
 }
 
 pub type RpcResult<T> = Result<T, RpcError>;
-
-fn idempotency_key(input: &str) -> String {
-    let mut hasher = sha2::Sha256::new();
-    hasher.update(input);
-    let value = hasher.finalize().to_vec();
-    hex::encode(value)
-}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RpcClient {
@@ -157,7 +151,7 @@ impl RpcClient {
             value: "application/json".to_string(),
         }];
         // add idempotency_key
-        let idempotency_key = idempotency_key(payload);
+        let idempotency_key = hash_with_sha256(payload);
 
         headers.push(HttpHeader {
             name: "X-Idempotency".to_string(),
@@ -209,16 +203,20 @@ impl RpcClient {
             DEBUG,
             "Calling url: {url} with payload: {payload}. Cycles: {cycles}"
         );
-
+        let start = api::time();
         match http_request(request, cycles).await {
             Ok((response,)) => {
+                let end = api::time();
+                let elapsed = (end - start) / 1_000_000_000;
+
                 log!(
                     DEBUG,
-                    "Got response (with {} bytes): {} from url: {} with status: {}",
+                    "Got response (with {} bytes): {} from url: {} with status: {} the time elapsed: {}",
                     response.body.len(),
                     String::from_utf8_lossy(&response.body),
                     url,
-                    response.status
+                    response.status,
+                    elapsed
                 );
 
                 match String::from_utf8(response.body) {
@@ -226,7 +224,19 @@ impl RpcClient {
                     Err(error) => Err(RpcError::ParseError(error.to_string())),
                 }
             }
-            Err((r, m)) => Err(RpcError::RpcRequestError(format!("({r:?}) {m:?}"))),
+            Err((r, m)) => {
+                let end = api::time();
+                let elapsed = (end - start) / 1_000_000_000;
+                log!(
+                    ERROR,
+                    "Got response  error : {:?},{} from url: {} ,the time elapsed: {}",
+                    r,
+                    m,
+                    url,
+                    elapsed
+                );
+                Err(RpcError::RpcRequestError(format!("({r:?}) {m:?}")))
+            }
         }
     }
 

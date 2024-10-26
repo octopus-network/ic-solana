@@ -1,3 +1,5 @@
+pub mod agent;
+pub mod compute_budget;
 pub(crate) mod constants;
 pub mod eddsa;
 pub mod ic_log;

@@ -11,6 +11,7 @@ use ic_cdk::{query, update};
 use ic_solana::ic_log::DEBUG;
 use ic_solana::response::{OptionalContext, Response, RpcBlockhash};
 use ic_solana::rpc_client::{JsonRpcResponse, RpcResult};
+use ic_solana::types::CommitmentLevel;
 use ic_solana::types::{
     BlockHash, CommitmentConfig, EncodingConfig, Instruction, Message, Pubkey,
     RpcAccountInfoConfig, RpcContextConfig, RpcSendTransactionConfig, RpcSignatureStatusConfig,
@@ -150,9 +151,12 @@ pub async fn sol_get_token_balance(
 #[update(name = "sol_latestBlockhash")]
 pub async fn sol_get_latest_blockhash(forward: Option<String>) -> RpcResult<String> {
     let client = rpc_client();
-    let blockhash = client
-        .get_latest_blockhash(RpcContextConfig::default(), forward)
-        .await?;
+    // let config = RpcContextConfig::default();
+    let config = RpcContextConfig {
+        commitment: Some(CommitmentConfig::finalized()),
+        min_context_slot: None,
+    };
+    let blockhash = client.get_latest_blockhash(config, forward).await?;
     Ok(blockhash.to_string())
 }
 #[query(hidden = true)]
@@ -495,9 +499,12 @@ pub async fn send_raw_transaction(
 
     let tx = Transaction::from_str(&raw_signed_transaction).expect("Invalid transaction");
 
-    let signature = client
-        .send_transaction(tx, RpcSendTransactionConfig::default(), forward)
-        .await?;
+    // let config = RpcSendTransactionConfig::default();
+    let config = RpcSendTransactionConfig {
+        preflight_commitment: Some(CommitmentLevel::Finalized),
+        ..Default::default()
+    };
+    let signature = client.send_transaction(tx, config, forward).await?;
 
     Ok(signature.to_string())
 }

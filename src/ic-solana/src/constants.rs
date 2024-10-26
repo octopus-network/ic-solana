@@ -52,3 +52,5 @@ pub const NODES_IN_SUBNET: u32 = 34;
 // https://internetcomputer.org/docs/current/references/t-sigs-how-it-works/#fees-for-the-t-schnorr-production-key
 // pub const EDDSA_SIGN_COST: u128 = 26_153_846_153;
 pub const EDDSA_SIGN_COST: u128 = 26_200_000_000;
+
+// pub const DELAY: u64 = 12;

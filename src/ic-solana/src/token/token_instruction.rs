@@ -142,3 +142,89 @@ pub fn initialize_metadata_pointer(
         data,
     }
 }
+
+/// Creates a `CloseAccount` instruction.
+/// Close an account by transferring all its SOL to the destination account.
+/// Non-native accounts may only be closed if its token amount is zero.
+///
+/// Accounts expected by this instruction:
+///
+///   * Single owner
+///   0. `[writable]` The account to close.
+///   1. `[writable]` The destination account.
+///   2. `[signer]` The account's owner.
+///
+///   * Multisignature owner
+///   0. `[writable]` The account to close.
+///   1. `[writable]` The destination account.
+///   2. `[]` The account's multisignature owner.
+///   3. ..3+M `[signer]` M signer accounts.
+pub fn close_account(
+    token_program_id: &Pubkey,
+    account_pubkey: &Pubkey,
+    destination_pubkey: &Pubkey,
+    owner_pubkey: &Pubkey,
+    signer_pubkeys: &[&Pubkey],
+) -> Instruction {
+    let mut data: Vec<u8> = vec![];
+    data.push(9);
+    let mut accounts = Vec::with_capacity(3 + signer_pubkeys.len());
+    accounts.push(AccountMeta::new(*account_pubkey, false));
+    accounts.push(AccountMeta::new(*destination_pubkey, false));
+    accounts.push(AccountMeta::new_readonly(
+        *owner_pubkey,
+        signer_pubkeys.is_empty(),
+    ));
+    for signer_pubkey in signer_pubkeys.iter() {
+        accounts.push(AccountMeta::new_readonly(**signer_pubkey, true));
+    }
+
+    Instruction {
+        program_id: *token_program_id,
+        accounts,
+        data,
+    }
+}
+
+/// Creates a `FreezeAccount` instruction.
+/// Freeze an Initialized account using the Mint's freeze_authority (if
+/// set).
+///
+/// Accounts expected by this instruction:
+///
+///   * Single owner
+///   0. `[writable]` The account to freeze.
+///   1. `[]` The token mint.
+///   2. `[signer]` The mint freeze authority.
+///
+///   * Multisignature owner
+///   0. `[writable]` The account to freeze.
+///   1. `[]` The token mint.
+///   2. `[]` The mint's multisignature freeze authority.
+///   3. ..3+M `[signer]` M signer accounts.
+pub fn freeze_account(
+    token_program_id: &Pubkey,
+    account_pubkey: &Pubkey,
+    mint_pubkey: &Pubkey,
+    owner_pubkey: &Pubkey,
+    signer_pubkeys: &[&Pubkey],
+) -> Instruction {
+    let mut data: Vec<u8> = vec![];
+    data.push(10);
+    let mut accounts = Vec::with_capacity(3 + signer_pubkeys.len());
+    accounts.push(AccountMeta::new(*account_pubkey, false));
+    accounts.push(AccountMeta::new_readonly(*mint_pubkey, false));
+    accounts.push(AccountMeta::new_readonly(
+        *owner_pubkey,
+        signer_pubkeys.is_empty(),
+    ));
+    for signer_pubkey in signer_pubkeys.iter() {
+        accounts.push(AccountMeta::new_readonly(**signer_pubkey, true));
+    }
+
+    Instruction {
+        program_id: *token_program_id,
+        accounts,
+        data,
+    }
+}
