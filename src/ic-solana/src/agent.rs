@@ -1,4 +1,4 @@
-use crate::eddsa::{eddsa_public_key, sign_with_eddsa};
+use crate::eddsa::{eddsa_public_key, sign_with_eddsa, KeyType};
 
 use crate::rpc_client::RpcResult;
 
@@ -16,10 +16,8 @@ use ic_canister_log::log;
 use serde::{Deserialize, Serialize};
 use serde_bytes::ByteBuf;
 
-
 use crate::token::token_metadata::Field;
 use std::str::FromStr;
-
 
 use crate::token::system_instruction;
 use crate::token::token_instruction;
@@ -46,7 +44,7 @@ pub struct TokenInfo {
     pub uri: String,
 }
 #[derive(CandidType, Deserialize, Serialize, Clone, Debug, PartialEq, Eq)]
-pub struct SolanaClient {
+pub struct SolanaAgent {
     pub sol_canister_id: Principal,
     pub payer: Pubkey,
     pub payer_derive_path: Vec<ByteBuf>,
@@ -54,10 +52,13 @@ pub struct SolanaClient {
     pub forward: Option<String>,
 }
 
-impl SolanaClient {
+impl SolanaAgent {
     pub async fn derive_account(chainkey_name: String, derive_path: String) -> Pubkey {
         let path = vec![ByteBuf::from(derive_path.as_str())];
-        Pubkey::try_from(eddsa_public_key(chainkey_name, path).await).unwrap()
+        Pubkey::try_from(
+            eddsa_public_key(crate::eddsa::KeyType::ChainKey, chainkey_name, path).await,
+        )
+        .unwrap()
     }
 
     pub async fn query_transaction(
@@ -308,6 +309,7 @@ impl SolanaClient {
         let token_pubkey_derived_path = vec![ByteBuf::from(token_create_info.token_id.as_str())];
         let token_mint = Pubkey::try_from(
             eddsa_public_key(
+                crate::eddsa::KeyType::ChainKey,
                 self.chainkey_name.clone(),
                 token_pubkey_derived_path.clone(),
             )
@@ -581,10 +583,11 @@ impl SolanaClient {
     }
 
     async fn sign(&self, key_path: Vec<ByteBuf>, tx: Vec<u8>) -> anyhow::Result<Signature> {
-        let signature = sign_with_eddsa(self.chainkey_name.clone(), key_path, tx)
-            .await
-            .try_into()
-            .map_err(|e| anyhow!("invalid signature: {:?}", e))?;
+        let signature =
+            sign_with_eddsa(&KeyType::ChainKey, self.chainkey_name.clone(), key_path, tx)
+                .await
+                .try_into()
+                .map_err(|e| anyhow!("invalid signature: {:?}", e))?;
         Ok(signature)
     }
 
@@ -594,7 +597,6 @@ impl SolanaClient {
         paths: Vec<Vec<ByteBuf>>,
         // forward: Option<String>,
     ) -> anyhow::Result<String> {
-        
         let blockhash = self.get_latest_blockhash().await?;
         log!(
             DEBUG,

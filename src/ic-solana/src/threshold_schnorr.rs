@@ -59,7 +59,6 @@ struct ManagementCanisterSignatureReply {
     pub signature: Vec<u8>,
 }
 
-
 pub async fn public_key(algorithm: SchnorrAlgorithm) -> Result<PublicKeyReply, String> {
     let request = ManagementCanisterSchnorrPublicKeyRequest {
         canister_id: None,
@@ -80,7 +79,6 @@ pub async fn public_key(algorithm: SchnorrAlgorithm) -> Result<PublicKeyReply, S
     })
 }
 
-
 pub async fn sign(message: String, algorithm: SchnorrAlgorithm) -> Result<SignatureReply, String> {
     let internal_request = ManagementCanisterSignatureRequest {
         message: message.as_bytes().to_vec(),
@@ -93,7 +91,7 @@ pub async fn sign(message: String, algorithm: SchnorrAlgorithm) -> Result<Signat
             Principal::management_canister(),
             "sign_with_schnorr",
             (internal_request,),
-            25_000_000_000,
+            26_153_846_153,
         )
         .await
         .map_err(|e| format!("sign_with_schnorr failed {e:?}"))?;
@@ -102,7 +100,6 @@ pub async fn sign(message: String, algorithm: SchnorrAlgorithm) -> Result<Signat
         signature_hex: hex::encode(&internal_reply.signature),
     })
 }
-
 
 pub async fn verify(
     signature_hex: String,

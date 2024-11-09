@@ -31,6 +31,7 @@ serde = "1"
 serde_json = "^1.0.117"
 serde_bytes = "^0.11.14"
 # uuid = { version = "1.10.0", features = ["v7"] }
+bip32 = { version = "0.5.1", features = ["k256"] }
 
 [profile.release]
 debug = false

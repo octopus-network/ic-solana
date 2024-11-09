@@ -7,6 +7,10 @@ dfx canister call ic-solana-provider sol_getTokenBalance '("GeDhDhMT8Cw4hi1vJyRt
 dfx canister call ic-solana-provider sol_getAccountInfo '("GeDhDhMT8Cw4hi1vJyRtU9wqWBXURchDoZxttBfFKq9r")'
 dfx canister call ic-solana-provider sol_getTransaction '("1zhKkhptmaKR83DMbn7FuBRZM2mHGgLSFEuAGoocET5wPywH4gy3FktfT8dL3FV4LJct86pBTsTTANv5NvNTAEN")'
 
+test_account=5nevxTLuX5TZsJg4Wf9ws6B1hecyFaHmjc5PNEJVrGiL
+limit=5
+dfx canister call ic-solana-provider sol_getSignatureForAddress "(\"$test_account\",opt $limit,null)"
+
 #dfx canister call ic-solana-provider sol_sendTransaction '( record { instructuons: } )'
 # test canister
 dfx canister call test_canister create_token_with_metaplex '()'
@@ -17,7 +21,9 @@ dfx canister call test_canister mint_to '("3gghk7mHWtFsJcg6EZGK7sbHj3qW6ExUdZLs9
 MASTER_KEY=$(solana address)
 echo "current solana cli default address: $MASTER_KEY and balance: $(solana balance $MASTER_KEY)"
 # get signer and init it
-SIGNER=$( dfx canister call test_canister get_payer '()')
+# dfx canister call test_canister get_payer '(variant { Native = blob "some random seed" })'
+# dfx canister call test_canister get_payer '(variant { ChainKey })'
+SIGNER=$(dfx canister call test_canister get_payer '(variant { Native = blob "some random seed" })')
 SIGNER=$(echo "$SIGNER" | awk -F'"' '{print $2}')
 echo "current SIGNER: $SIGNER"
 # transfer SOL to init signer
@@ -26,7 +32,23 @@ echo "transfer SOL to $SIGNER from $MASTER_KEY"
 solana transfer $SIGNER $AMOUNT --with-memo init_account --allow-unfunded-recipient
 echo "$SIGNER balance: $(solana balance $SIGNER)"
 
-TOKEN_MINT="942bM35qY1Ft4Y9F8viykXsGz9EvgGXFeRfJh2FAbXT6"
+
+
+TOKEN_ID="RUNES•X•BITCOIN202411021450"
+TOKEN_NAME="RUNES•X•BITCOIN"
+TOKEN_SYMBOL="X"
+DECIMALS=0
+URI="https://arweave.net/iLV2-ApjrXPDNoHldzB4a0fVVL-0hXR6dZGgudknz7c"
+dfx canister call test_canister create_token_with_metaplex "(
+    record { token_id = \"${TOKEN_ID}\"; 
+             name = \"${TOKEN_NAME}\";
+             symbol = \"${TOKEN_SYMBOL}\"; 
+             decimals = ${DECIMALS};
+             uri = \"${URI}\"; 
+         }
+    )"
+
+TOKEN_MINT="8ECqtdggh8vhyRQHXYovNGZ8uPZdKhXvPtJXGQC77v5j"
 TOKEN_ID="Runes•Omnity•Bitcion"
 TOKEN_NAME="Runes•Omnity•Bitcion"
 TOKEN_SYMBOL="OT"
@@ -42,21 +64,7 @@ dfx canister call test_canister update_token_with_metaplex "(\"${TOKEN_MINT}\",
     )"
 
 
-TOKEN_ID="RUNES•X•BITCOIN202420241845"
-TOKEN_NAME="RUNES•X•BITCOIN"
-TOKEN_SYMBOL="X"
-DECIMALS=0
-URI="https://arweave.net/iLV2-ApjrXPDNoHldzB4a0fVVL-0hXR6dZGgudknz7c"
-dfx canister call test_canister create_token_with_metaplex "(
-    record { token_id = \"${TOKEN_ID}\"; 
-             name = \"${TOKEN_NAME}\";
-             symbol = \"${TOKEN_SYMBOL}\"; 
-             decimals = ${DECIMALS};
-             uri = \"${URI}\"; 
-         }
-    )"
-
-TOKEN_MINT="DVT5QMPUJf4gDVWNXZQKH2ibx4RY73v956uP4o3f81ca"
+TOKEN_MINT="8ECqtdggh8vhyRQHXYovNGZ8uPZdKhXvPtJXGQC77v5j"
 WALLET_ADDRESS="3gghk7mHWtFsJcg6EZGK7sbHj3qW6ExUdZLs9q8GRjia"
 dfx canister call test_canister create_ata "(\"${WALLET_ADDRESS}\",\"${TOKEN_MINT}\")"
 
@@ -85,9 +93,14 @@ WALLET_ADDRESS="FDR2mUpiHKFonnwbUujLyhuNTt7LHEjZ1hDFX4UuCngt"
 dfx canister call test_canister get_compute_units_4_create_ata "(\"${WALLET_ADDRESS}\",\"${TOKEN_MINT}\")"
 
 
-TOKEN_MINT="DVT5QMPUJf4gDVWNXZQKH2ibx4RY73v956uP4o3f81ca"
+TOKEN_MINT="UBhEuN7fAdERaoHgNZu3KHUeQ831mhmgYGTAJyFJChh"
 WALLET_ADDRESS="3gghk7mHWtFsJcg6EZGK7sbHj3qW6ExUdZLs9q8GRjia"
 dfx canister call test_canister get_compute_units_4_mint_to "(\"${WALLET_ADDRESS}\",${AMOUNT},\"${TOKEN_MINT}\")"
+
+
+TOKEN_MINT="UBhEuN7fAdERaoHgNZu3KHUeQ831mhmgYGTAJyFJChh"
+ATA="ZFaNVgnzP8x531fkmXozGHNj6FLJBNVcpgcNLa4g1km"
+dfx canister call test_canister get_compute_units_4_mint_to "(\"${ATA}\",${AMOUNT},\"${TOKEN_MINT}\")"
 
 
 WALLET_ADDRESS="FDR2mUpiHKFonnwbUujLyhuNTt7LHEjZ1hDFX4UuCngt"

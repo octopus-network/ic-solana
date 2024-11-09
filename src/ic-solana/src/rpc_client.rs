@@ -656,6 +656,12 @@ impl RpcClient {
             JsonRpcResponse<Vec<RpcConfirmedTransactionStatusWithSignature>>,
         >(&response)?;
 
+        log!(
+            DEBUG,
+            "[ic-solana] get_signatures_for_address json_response: {:?}",
+            json_response
+        );
+
         if let Some(e) = json_response.error {
             Err(e.into())
         } else {

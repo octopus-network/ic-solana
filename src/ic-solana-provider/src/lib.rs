@@ -11,13 +11,13 @@ use ic_cdk::{query, update};
 use ic_solana::ic_log::DEBUG;
 use ic_solana::response::{OptionalContext, Response, RpcBlockhash};
 use ic_solana::rpc_client::{JsonRpcResponse, RpcResult};
-use ic_solana::types::CommitmentLevel;
 use ic_solana::types::{
     BlockHash, CommitmentConfig, EncodingConfig, Instruction, Message, Pubkey,
     RpcAccountInfoConfig, RpcContextConfig, RpcSendTransactionConfig, RpcSignatureStatusConfig,
     RpcSimulateTransactionConfig, RpcTransactionConfig, Signature, Transaction, TransactionStatus,
     UiAccount, UiAccountEncoding, UiTokenAmount, UiTransactionEncoding,
 };
+use ic_solana::types::{CommitmentLevel, RpcSignaturesForAddressConfig};
 use ic_solana::{http_request_required_cycles, ic_log};
 use ic_stable_structures::writer::Writer;
 use ic_stable_structures::Memory;
@@ -432,6 +432,41 @@ fn transform_signature_statuses(mut args: TransformArgs) -> TransformedHttpRespo
         resp
     );
     resp
+}
+
+///
+/// Returns the statuses of a list of transaction signatures.
+///
+#[update(name = "sol_getSignatureForAddress")]
+pub async fn sol_get_signatures_for_address(
+    pubkey: String,
+    limit: Option<usize>,
+    forward: Option<String>,
+) -> RpcResult<String> {
+    let client = rpc_client();
+    let config = RpcSignaturesForAddressConfig {
+        limit,
+        ..Default::default()
+    };
+    let response = client
+        .get_signatures_for_address(
+            &Pubkey::from_str(&pubkey).expect("Invalid public key"),
+            config,
+            forward,
+        )
+        .await?;
+    log!(
+        DEBUG,
+        "[ic-solana-provider] sol_get_signatures_for_address response: {:?}",
+        response
+    );
+    let response_str = serde_json::to_string(&response).unwrap();
+    log!(
+        DEBUG,
+        "[ic-solana-provider] sol_get_signatures_for_address response_str: {:?}",
+        response_str
+    );
+    Ok(response_str)
 }
 
 ///
