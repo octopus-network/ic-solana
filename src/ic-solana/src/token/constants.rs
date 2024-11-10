@@ -29,3 +29,8 @@ pub fn associated_account_program_id() -> Pubkey {
 pub fn route_signer_derive_path() -> Vec<ByteBuf> {
     vec![ByteBuf::from("custom_addr")]
 }
+
+pub fn memo_program_id() -> Pubkey {
+    Pubkey::from_str("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr").unwrap()
+}
+
