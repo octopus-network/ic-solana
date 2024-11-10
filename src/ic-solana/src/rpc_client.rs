@@ -165,7 +165,6 @@ impl RpcClient {
             });
         }
 
-
         log!(
             DEBUG,
             "ic-solana::rpc_client::call: http header: {:?}",
