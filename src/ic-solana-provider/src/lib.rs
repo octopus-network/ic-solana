@@ -4,8 +4,12 @@ use eddsa_api::{eddsa_public_key, sign_with_eddsa};
 use ic_canister_log::log;
 use ic_canisters_http_types::{HttpRequest, HttpResponse, HttpResponseBuilder};
 
-
+use ic_cdk::api::management_canister::http_request::{
+    CanisterHttpRequestArgument, HttpHeader, HttpMethod, HttpResponse as TransformedHttpResponse,
+    TransformArgs,
+};
 use ic_cdk::{query, update};
+
 use ic_solana::ic_log::DEBUG;
 use ic_solana::response::{OptionalContext, Response, RpcBlockhash};
 use ic_solana::rpc_client::{JsonRpcResponse, RpcResult};
