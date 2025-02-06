@@ -164,11 +164,7 @@ impl RpcClient {
                 value: forward,
             });
         }
-        // add sol.nownodes.io key
-        // headers.push(HttpHeader {
-        //     name: "api-key".to_string(),
-        //     value: "c358082d-9e68-43da-a0fb-6f7240d01136".to_string(),
-        // });
+
 
         log!(
             DEBUG,
