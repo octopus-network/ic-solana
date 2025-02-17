@@ -651,11 +651,8 @@ impl SolanaClient {
             .await?;
         }
 
-        log!(
-            DEBUG,
-            "[solana_client::mint_to] set compoute unit success"
-        );
-        
+        log!(DEBUG, "[solana_client::mint_to] set compoute unit success");
+
         let tx_hash = self
             .send_raw_transaction(
                 instructions.as_slice(),
@@ -663,12 +660,9 @@ impl SolanaClient {
                 self.key_type.to_owned(),
             )
             .await?;
-        
-        log!(
-            DEBUG,
-            "[solana_client::mint_to] send tx success"
-        );
-        
+
+        log!(DEBUG, "[solana_client::mint_to] send tx success");
+
         Ok(tx_hash)
     }
 
@@ -740,7 +734,7 @@ impl SolanaClient {
         let response: Result<(RpcResult<u64>,), _> = ic_cdk::call(
             self.sol_canister_id,
             "sol_getBalance",
-            (to_account.to_string(), self.forward.to_owned()),
+            (self.payer.to_string(), self.forward.to_owned()),
         )
         .await;
 
@@ -881,16 +875,19 @@ impl SolanaClient {
             "[solana_client::get_compute_units] start exec, path len: {} ",
             paths.len()
         );
-        
+
         for i in 0..paths.len() {
             let signature = self
                 .sign(&key_type, paths[i].clone(), tx.message_data())
                 .await?;
             tx.add_signature(i, signature);
         }
-        
-        log!(DEBUG, "[solana_client::get_compute_units] finished sign message");
-        
+
+        log!(
+            DEBUG,
+            "[solana_client::get_compute_units] finished sign message"
+        );
+
         let response: Result<(RpcResult<Option<u64>>,), _> = ic_cdk::call(
             self.sol_canister_id,
             "sol_getComputeUnits",
