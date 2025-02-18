@@ -21,8 +21,9 @@ ic-cdk = "0.14"
 ic-types = "0.7"
 ic-canister-log = "0.2"
 ic-canisters-http-types = { git = "https://github.com/dfinity/ic", package = "ic-canisters-http-types" }
-ic-crypto-ed25519 = { git = "https://github.com/dfinity/ic", package = "ic-crypto-ed25519" }
-ic-management-canister-types = { git = "https://github.com/dfinity/ic", package = "ic-management-canister-types" }
+ic-crypto-ed25519 = { package = "ic-ed25519", version = "0.2.0"}
+ic-management-canister-types = "0.1.0"
+# ic-management-canister-types = { git = "https://github.com/dfinity/ic", package = "ic-management-canister-types"}
 #ic-state-machine-tests = { git = "https://github.com/dfinity/ic", package = "ic-state-machine-tests" }
 ic-solana = { path = "./src/ic-solana" }
 ic-solana-provider = { path = "./src/ic-solana-provider" }
