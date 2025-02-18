@@ -18,11 +18,10 @@ use crate::types::{BlockHash, Instruction, Message, Pubkey, Signature, Transacti
 use anyhow::anyhow;
 
 use candid::{CandidType, Principal};
+use core::fmt;
 use ic_canister_log::log;
 use serde::{Deserialize, Serialize};
 use serde_bytes::ByteBuf;
-
-use core::fmt;
 use std::str::FromStr;
 use token_metadata::Field;
 pub mod associated_account;
@@ -731,36 +730,48 @@ impl SolanaClient {
     }
 
     pub async fn transfer_to(&self, to_account: Pubkey, amount: u64) -> anyhow::Result<String> {
-        let response: Result<(RpcResult<u64>,), _> = ic_cdk::call(
-            self.sol_canister_id,
-            "sol_getBalance",
-            (self.payer.to_string(), self.forward.to_owned()),
+        self.transfer(
+            self.payer,
+            self.payer_derive_path.clone(),
+            to_account,
+            amount,
         )
-        .await;
+        .await
+    }
 
-        let lamports = response
-            .map_err(|e| anyhow!(format!("sol_getBalance err: {:?}", e)))?
-            .0
-            .map_err(|e| anyhow!(format!("sol_getBalance rpc error: {:?}", e)))?;
-
+    pub async fn transfer(
+        &self,
+        from_account: Pubkey,
+        from_path: Vec<ByteBuf>,
+        to_account: Pubkey,
+        amount: u64,
+    ) -> anyhow::Result<String> {
+        let lamports = self.get_balance(from_account.to_string()).await?;
         let fee = 10_000;
-
-        if lamports <= amount + fee {
-            ic_cdk::trap("Not enough lamports");
+        let mut paths = vec![self.payer_derive_path.clone()];
+        if from_account == self.payer {
+            if lamports < amount + fee {
+                return Err(anyhow!("not enough lamports"));
+            }
+        } else {
+            if lamports < amount {
+                return Err(anyhow!("not enough lamports"));
+            }
+            let fee_lamports = self.get_balance(self.payer.to_string()).await?;
+            if fee_lamports < fee {
+                return Err(anyhow!("not enough fee lamports"));
+            }
+            paths.push(from_path);
         }
 
         let instructions = vec![system_instruction::transfer(
-            &self.payer,
+            &from_account,
             &to_account,
             amount,
         )];
 
         let tx_hash = self
-            .send_raw_transaction(
-                instructions.as_slice(),
-                vec![self.payer_derive_path.clone()],
-                KeyType::ChainKey,
-            )
+            .send_raw_transaction(instructions.as_slice(), paths, KeyType::ChainKey)
             .await?;
         Ok(tx_hash)
     }
