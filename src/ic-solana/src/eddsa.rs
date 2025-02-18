@@ -6,8 +6,8 @@ use bip32::Seed;
 use candid::Principal;
 use candid::{CandidType, Deserialize};
 use ic_management_canister_types::{
-    DerivationPath, SchnorrAlgorithm, SchnorrKeyId, SchnorrPublicKeyArgs, SchnorrPublicKeyResponse,
-    SignWithSchnorrArgs, SignWithSchnorrReply,
+    SchnorrAlgorithm, SchnorrKeyId, SchnorrPublicKeyArgs, SchnorrPublicKeyResult,
+    SignWithSchnorrArgs, SignWithSchnorrResult,
 };
 use serde::Serialize;
 use serde_bytes::ByteBuf;
@@ -26,12 +26,15 @@ pub async fn eddsa_public_key(
 ) -> Vec<u8> {
     match key_type {
         KeyType::ChainKey => {
-            let res: Result<(SchnorrPublicKeyResponse,), _> = ic_cdk::call(
+            let res: Result<(SchnorrPublicKeyResult,), _> = ic_cdk::call(
                 Principal::management_canister(),
                 "schnorr_public_key",
                 (SchnorrPublicKeyArgs {
                     canister_id: None,
-                    derivation_path: DerivationPath::new(derivation_path),
+                    derivation_path: derivation_path
+                        .iter()
+                        .map(|p| p.clone().into_vec())
+                        .collect(),
                     key_id: SchnorrKeyId {
                         algorithm: SchnorrAlgorithm::Ed25519,
                         name: key_name,
@@ -84,12 +87,15 @@ pub async fn sign_with_eddsa(
 ) -> Vec<u8> {
     match key_type {
         KeyType::ChainKey => {
-            let res: Result<(SignWithSchnorrReply,), _> = ic_cdk::api::call::call_with_payment(
+            let res: Result<(SignWithSchnorrResult,), _> = ic_cdk::api::call::call_with_payment(
                 Principal::management_canister(),
                 "sign_with_schnorr",
                 (SignWithSchnorrArgs {
                     message,
-                    derivation_path: DerivationPath::new(derivation_path),
+                    derivation_path: derivation_path
+                        .iter()
+                        .map(|p| p.clone().into_vec())
+                        .collect(),
                     key_id: SchnorrKeyId {
                         name: key_name,
                         algorithm: SchnorrAlgorithm::Ed25519,
@@ -139,8 +145,8 @@ pub fn hash_with_sha256(input: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use crate::types::Pubkey;
     use super::*;
+    use crate::types::Pubkey;
 
     #[test]
     fn test_sign_and_verify_native_schnorr_ed25519() {
