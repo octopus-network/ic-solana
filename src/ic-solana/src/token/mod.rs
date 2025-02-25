@@ -789,7 +789,7 @@ impl SolanaClient {
         Ok(signature)
     }
 
-    async fn send_raw_transaction(
+    pub async fn send_raw_transaction(
         &self,
         instructions: &[Instruction],
         paths: Vec<Vec<ByteBuf>>,
