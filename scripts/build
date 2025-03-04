@@ -1,39 +1,150 @@
 #!/usr/bin/env bash
 
-CANISTER=ic-solana-provider
-CANISTER_WASM=target/wasm32-unknown-unknown/release/$(echo $CANISTER | tr '-' '_').wasm
+set -euo pipefail
 
-# Build the canister
-cargo build --release --target wasm32-unknown-unknown --package $CANISTER
+IC_WASM_VERSION="0.9.0"
 
-# Extract the did file
-candid-extractor $CANISTER_WASM > ./src/$CANISTER/$CANISTER.did
+# Make sure we always run from the root
+SCRIPTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$SCRIPTS_DIR/.."
 
-# optimize wasm file
-# ic-wasm $CANISTER_WASM -o $CANISTER_WASM metadata candid:service -f $DID_PATH -v public
+cd $PROJECT_ROOT
 
-gzip --no-name --force $CANISTER_WASM
-cp $CANISTER_WASM.gz ./src/$CANISTER/$CANISTER.wasm.gz
+# Display the script title
+title() {
+  echo -e "Builds IC Solana Canister"
+}
 
-# Deploy schnorr canister
-dfx deploy schnorr_canister
+usage() {
+  cat <<EOF
 
-# Get the canister id
-SCHNORR_CANISTER_ID=$(dfx canister id schnorr_canister)
+Usage:
+  $0 [--only-dependencies] [--rpc] [--wallet]
 
-echo "Schnorr canister id: $CANISTER_ID"
+Options:
+  --only-dependencies     only build rust dependencies (no js build, no wasm optimization)
+  --rpc                   build the rpc canister
+  --wallet                build the wallet canister
+  -h, --help              Show this help message
+EOF
+}
 
-# Deploy the solana canister and set the schnorr canister id
-dfx deploy ic-solana-provider --argument "( record { nodesInSubnet = 28; schnorr_canister = opt \"${SCHNORR_CANISTER_ID}\" } )" --mode=reinstall -y
+help() {
+  cat <<EOF
 
-# Get the canister id
-CANISTER_ID=$(dfx canister id ic-solana-provider)
+Builds the IC Solana canisters.
 
-echo "Solana canister id: $CANISTER_ID"
+NOTE: This requires a working rust toolchain as well as ic-wasm.
+EOF
+}
 
-# Deploy the test canister
-dfx deploy test_canister --argument "( \"${CANISTER_ID}\" )" --mode=reinstall -y
+# Function to build a single canister
+# Arguments:
+#   $1 - Canister name (e.g., ic-solana-rpc)
+#   $2... - Extra cargo build arguments
+build_canister() {
+  local canister=$1
+  shift
+  local extra_build_args=("$@")
 
-echo "Test canister id: $CANISTER_ID"
+  local src_dir="$PROJECT_ROOT/src/$canister"
+  local target="wasm32-unknown-unknown"
+  local cargo_home="${CARGO_HOME:-"$HOME/.cargo"}"
+  local rustflags="--remap-path-prefix $cargo_home=/cargo -C link-args=-zstack-size=3000000"
+  local cargo_target_dir="${CARGO_TARGET_DIR:-"$PROJECT_ROOT/target"}"
 
-echo "Done"
+  # Prepare cargo build arguments
+  local cargo_build_args=(
+    --manifest-path "$src_dir/Cargo.toml"
+    --target "$target"
+    --release
+    --locked
+  )
+
+  # Append any extra build arguments
+  if [[ ${#extra_build_args[@]} -gt 0 ]]; then
+    cargo_build_args+=("${extra_build_args[@]}")
+  fi
+
+  echo "Running cargo build for '$canister' with arguments: ${cargo_build_args[*]}"
+  echo "RUSTFLAGS: $rustflags"
+
+  RUSTFLAGS="$rustflags" cargo build "${cargo_build_args[@]}"
+
+  # If only dependencies are to be built, exit here
+  if [[ -n "$ONLY_DEPS" ]]; then
+    echo "Dependencies built for '$canister'."
+    return
+  fi
+
+  # Retrieve package version using jq
+  local package_version
+  package_version=$(cargo metadata --format-version=1 --no-deps |
+    jq -r --arg name "$canister" '.packages[] | select(.name == $name) | .version') || true
+
+  if [[ -z "$package_version" ]]; then
+    error_exit "Failed to retrieve version for package '$canister'. Ensure that the Cargo.toml is correctly configured."
+  fi
+
+  # Optimize wasm and set metadata
+  ic-wasm "$cargo_target_dir/$target/release/${canister}.wasm" -o "./$canister.wasm" shrink
+  ic-wasm "$canister.wasm" -o "$canister.wasm" metadata candid:service -f "$src_dir/$canister.did" -v public
+
+  # # indicate support for certificate version 1 and 2 in the canister metadata
+  # ic-wasm "$canister.wasm" -o "$canister.wasm" metadata supported_certificate_versions -d "1,2" -v public
+
+  if [ -n "$package_version" ]; then
+    ic-wasm "$canister.wasm" -o "$canister.wasm" metadata app:version -d "$package_version" -v public
+  fi
+
+  case "$canister" in
+  ic-solana-rpc | ic-solana-wallet)
+    ic-wasm "$canister.wasm" -o "$canister.wasm" metadata candid:args -d "(InitArgs)" -v public
+    ;;
+  esac
+
+  gzip --no-name --force "$canister.wasm"
+
+  echo "Done"
+}
+
+# Checking for dependencies
+if [[ ! "$(command -v ic-wasm)" || "$(ic-wasm --version)" != "ic-wasm $IC_WASM_VERSION" ]]; then
+  echo "could not find ic-wasm $IC_WASM_VERSION"
+  echo "ic-wasm version $IC_WASM_VERSION is needed, please run the following command:"
+  echo " cargo install ic-wasm --version $IC_WASM_VERSION"
+  exit 1
+fi
+
+ONLY_DEPS=
+CANISTERS=()
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+  -h | --help)
+    title
+    usage
+    help
+    exit 0
+    ;;
+  --only-dependencies)
+    ONLY_DEPS=1
+    shift
+    ;;
+  --rpc)
+    build_canister "ic-solana-rpc"
+    shift
+    ;;
+  --wallet)
+    build_canister "ic-solana-wallet"
+    shift
+    ;;
+  *)
+    echo "ERROR: unknown argument $1"
+    usage
+    echo
+    echo "Use 'build --help' for more information"
+    exit 1
+    ;;
+  esac
+done

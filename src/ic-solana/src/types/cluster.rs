@@ -1,6 +1,6 @@
-use anyhow::{anyhow, Result};
+use std::{error::Error, fmt, str::FromStr};
+
 use serde::{Deserialize, Serialize};
-use std::str::FromStr;
 use url::Url;
 
 #[derive(Serialize, Deserialize, Default, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
@@ -14,43 +14,71 @@ pub enum Cluster {
     Custom(String, String),
 }
 
+#[derive(Debug)]
+pub enum ClusterError {
+    InvalidCluster,
+    UrlParseError(url::ParseError),
+    SetPortError,
+    SetSchemeError,
+}
+
+impl fmt::Display for ClusterError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ClusterError::InvalidCluster => write!(f, "Invalid cluster"),
+            ClusterError::UrlParseError(e) => write!(f, "URL parse error: {}", e),
+            ClusterError::SetPortError => write!(f, "Unable to set port"),
+            ClusterError::SetSchemeError => write!(f, "Unable to set scheme"),
+        }
+    }
+}
+
+impl Error for ClusterError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            ClusterError::UrlParseError(e) => Some(e),
+            _ => None,
+        }
+    }
+}
+
+impl From<url::ParseError> for ClusterError {
+    fn from(err: url::ParseError) -> ClusterError {
+        ClusterError::UrlParseError(err)
+    }
+}
+
 impl FromStr for Cluster {
-    type Err = anyhow::Error;
-    fn from_str(s: &str) -> Result<Cluster> {
-        match s.to_lowercase().as_str() {
+    type Err = ClusterError;
+
+    fn from_str(s: &str) -> Result<Cluster, ClusterError> {
+        match s.to_ascii_lowercase().as_str() {
             "t" | "testnet" => Ok(Cluster::Testnet),
             "m" | "mainnet" => Ok(Cluster::Mainnet),
             "d" | "devnet" => Ok(Cluster::Devnet),
             "l" | "localnet" => Ok(Cluster::Localnet),
             "g" | "debug" => Ok(Cluster::Debug),
             _ if s.starts_with("http") => {
-                let http_url = s;
-
-                let mut ws_url = Url::parse(http_url)?;
+                let mut ws_url = Url::parse(s)?;
                 if let Some(port) = ws_url.port() {
-                    ws_url.set_port(Some(port + 1))
-                        .map_err(|_| anyhow!("Unable to set port"))?;
+                    ws_url
+                        .set_port(Some(port + 1))
+                        .map_err(|_| ClusterError::SetPortError)?;
                 }
                 if ws_url.scheme() == "https" {
-                    ws_url.set_scheme("wss")
-                        .map_err(|_| anyhow!("Unable to set scheme"))?;
+                    ws_url.set_scheme("wss").map_err(|_| ClusterError::SetSchemeError)?;
                 } else {
-                    ws_url.set_scheme("ws")
-                        .map_err(|_| anyhow!("Unable to set scheme"))?;
+                    ws_url.set_scheme("ws").map_err(|_| ClusterError::SetSchemeError)?;
                 }
-
-
-                Ok(Cluster::Custom(http_url.to_string(), ws_url.to_string()))
+                Ok(Cluster::Custom(s.to_string(), ws_url.to_string()))
             }
-            _ => Err(anyhow::Error::msg(
-                "Cluster must be one of [localnet, testnet, mainnet, devnet] or be an http or https url\n",
-            )),
+            _ => Err(ClusterError::InvalidCluster),
         }
     }
 }
 
-impl std::fmt::Display for Cluster {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+impl fmt::Display for Cluster {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let cluster_str = match self {
             Cluster::Testnet => "testnet",
             Cluster::Mainnet => "mainnet",
@@ -64,6 +92,12 @@ impl std::fmt::Display for Cluster {
 }
 
 impl Cluster {
+    pub fn host_str(&self) -> Option<String> {
+        Url::parse(self.url())
+            .ok()
+            .and_then(|u| u.host_str().map(|host| host.to_string()))
+    }
+
     pub fn url(&self) -> &str {
         match self {
             Cluster::Devnet => "https://api.devnet.solana.com",
@@ -74,6 +108,7 @@ impl Cluster {
             Cluster::Custom(url, _ws_url) => url,
         }
     }
+
     pub fn ws_url(&self) -> &str {
         match self {
             Cluster::Devnet => "wss://api.devnet.solana.com",
@@ -139,6 +174,7 @@ mod tests {
             cluster
         );
     }
+
     #[test]
     fn test_https_no_port() {
         let url = "https://my-url.com/";

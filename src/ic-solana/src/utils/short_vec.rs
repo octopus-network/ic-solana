@@ -3,13 +3,12 @@
 #![allow(dead_code)]
 #![allow(clippy::arithmetic_side_effects)]
 
-use {
-    serde::{
-        de::{self, Deserializer, SeqAccess, Visitor},
-        ser::{self, SerializeTuple, Serializer},
-        Deserialize, Serialize,
-    },
-    std::{convert::TryFrom, fmt, marker::PhantomData},
+use std::{convert::TryFrom, fmt, marker::PhantomData};
+
+use serde::{
+    de::{self, Deserializer, SeqAccess, Visitor},
+    ser::{self, SerializeTuple, Serializer},
+    Deserialize, Serialize,
 };
 
 /// Same as u16, but serialized with 1 to 3 bytes. If the value is above
@@ -66,14 +65,12 @@ impl VisitError {
         match self {
             VisitError::TooLong(len) => de::Error::invalid_length(len, &"three or fewer bytes"),
             VisitError::TooShort(len) => de::Error::invalid_length(len, &"more bytes"),
-            VisitError::Overflow(val) => de::Error::invalid_value(
-                de::Unexpected::Unsigned(val as u64),
-                &"a value in the range [0, 65535]",
-            ),
-            VisitError::Alias => de::Error::invalid_value(
-                de::Unexpected::Other("alias encoding"),
-                &"strict form encoding",
-            ),
+            VisitError::Overflow(val) => {
+                de::Error::invalid_value(de::Unexpected::Unsigned(val as u64), &"a value in the range [0, 65535]")
+            }
+            VisitError::Alias => {
+                de::Error::invalid_value(de::Unexpected::Other("alias encoding"), &"strict form encoding")
+            }
             VisitError::ByteThreeContinues => de::Error::invalid_value(
                 de::Unexpected::Other("continue signal on byte-three"),
                 &"a terminal signal on or before byte-three",
@@ -101,10 +98,8 @@ fn visit_byte(elem: u8, val: u16, nth_byte: usize) -> VisitResult {
         return Err(VisitError::ByteThreeContinues);
     }
 
-    let shift = u32::try_from(nth_byte)
-        .unwrap_or(std::u32::MAX)
-        .saturating_mul(7);
-    let elem_val = elem_val.checked_shl(shift).unwrap_or(std::u32::MAX);
+    let shift = u32::try_from(nth_byte).unwrap_or(u32::MAX).saturating_mul(7);
+    let elem_val = elem_val.checked_shl(shift).unwrap_or(u32::MAX);
 
     let new_val = val | elem_val;
     let val = u16::try_from(new_val).map_err(|_| VisitError::Overflow(new_val))?;
@@ -135,9 +130,9 @@ impl<'de> Visitor<'de> for ShortU16Visitor {
         // 3 bytes : 1xxxxxxx 1yyyyyyy 000000zz => zzyyyyyy yxxxxxxx : 16,384 - 65,535
         let mut val: u16 = 0;
         for nth_byte in 0..MAX_ENCODING_LENGTH {
-            let elem: u8 = seq.next_element()?.ok_or_else(|| {
-                VisitError::TooShort(nth_byte.saturating_add(1)).into_de_error::<A>()
-            })?;
+            let elem: u8 = seq
+                .next_element()?
+                .ok_or_else(|| VisitError::TooShort(nth_byte.saturating_add(1)).into_de_error::<A>())?;
             match visit_byte(elem, val, nth_byte).map_err(|e| e.into_de_error::<A>())? {
                 VisitStatus::Done(new_val) => return Ok(ShortU16(new_val)),
                 VisitStatus::More(new_val) => val = new_val,
@@ -161,17 +156,13 @@ impl<'de> Deserialize<'de> for ShortU16 {
 /// serialization on an ordinary vector with the following field annotation:
 ///
 /// #[serde(with = "short_vec")]
-///
-pub fn serialize<S: Serializer, T: Serialize>(
-    elements: &[T],
-    serializer: S,
-) -> Result<S::Ok, S::Error> {
+pub fn serialize<S: Serializer, T: Serialize>(elements: &[T], serializer: S) -> Result<S::Ok, S::Error> {
     // Pass a non-zero value to serialize_tuple() so that serde_json will
     // generate an open bracket.
     let mut seq = serializer.serialize_tuple(1)?;
 
     let len = elements.len();
-    if len > std::u16::MAX as usize {
+    if len > u16::MAX as usize {
         return Err(ser::Error::custom("length larger than u16"));
     }
     let short_len = ShortU16(len as u16);
@@ -201,16 +192,12 @@ where
     where
         A: SeqAccess<'de>,
     {
-        let short_len: ShortU16 = seq
-            .next_element()?
-            .ok_or_else(|| de::Error::invalid_length(0, &self))?;
+        let short_len: ShortU16 = seq.next_element()?.ok_or_else(|| de::Error::invalid_length(0, &self))?;
         let len = short_len.0 as usize;
 
         let mut result = Vec::with_capacity(len);
         for i in 0..len {
-            let elem = seq
-                .next_element()?
-                .ok_or_else(|| de::Error::invalid_length(i, &self))?;
+            let elem = seq.next_element()?.ok_or_else(|| de::Error::invalid_length(i, &self))?;
             result.push(elem);
         }
         Ok(result)
@@ -221,14 +208,13 @@ where
 /// deserialization on an ordinary vector with the following field annotation:
 ///
 /// #[serde(with = "short_vec")]
-///
 pub fn deserialize<'de, D, T>(deserializer: D) -> Result<Vec<T>, D::Error>
 where
     D: Deserializer<'de>,
     T: Deserialize<'de>,
 {
     let visitor = ShortVecVisitor { _t: PhantomData };
-    deserializer.deserialize_tuple(std::usize::MAX, visitor)
+    deserializer.deserialize_tuple(usize::MAX, visitor)
 }
 
 pub struct ShortVec<T>(pub Vec<T>);

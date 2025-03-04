@@ -1,0 +1,24 @@
+[package]
+name = "ic-solana-wallet"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+candid = { workspace = true }
+ic-cdk = { workspace = true }
+ic-management-canister-types = { workspace = true }
+ic-solana = { workspace = true }
+serde = { workspace = true }
+serde_bytes = { workspace = true }
+
+[dev-dependencies]
+#solana-sdk = "2.0"
+#solana-client = "2.0"
+ic-test-utilities-load-wasm = { workspace = true }
+ic-solana-rpc = { workspace = true }
+serde_bytes = { workspace = true }
+test-utils = { workspace = true }

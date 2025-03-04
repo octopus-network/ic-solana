@@ -1,18 +1,20 @@
 [workspace]
 resolver = "2"
 members = [
+    "src/e2e",
+    "src/test-utils",
     "src/ic-solana",
-    "src/ic-solana-provider",
-    "src/test_canister",
+    "src/ic-solana-rpc",
+    "src/ic-solana-wallet",
 ]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.3.0"
 description = "Interact with Solana blockchain from the Internet Computer."
 keywords = ["dfinity", "icp", "web3", "solana", "rpc"]
 authors = [
     "Vladyslav Korniienko <vk.tiamo@gmail.com>",
-    "mFactory Team (https://mfactory.tech)"
+    "mFactory Team (https://mfactory.tech)",
 ]
 homepage = "https://github.com/mfactory-lab/ic-solana"
 repository = "https://github.com/mfactory-lab/ic-solana"
@@ -20,33 +22,47 @@ license = "Apache-2.0"
 edition = "2021"
 
 [workspace.dependencies]
-candid = { version = "0.10" }
-ic-cdk = "0.14"
-ic-types = "0.7"
+# local dependencies
+ic-solana = { path = "src/ic-solana" }
+ic-solana-rpc = { path = "src/ic-solana-rpc" }
+ic-solana-wallet = { path = "src/ic-solana-wallet" }
+test-utils = { path = "src/test-utils" }
+
+# ic dependencies
+candid = "0.10"
+ic-agent = "0.39"
+ic-cdk = "0.17"
 ic-canister-log = "0.2"
 ic-canisters-http-types = { git = "https://github.com/dfinity/ic", package = "ic-canisters-http-types" }
 ic-crypto-ed25519 = { git = "https://github.com/dfinity/ic", package = "ic-crypto-ed25519" }
 ic-management-canister-types = { git = "https://github.com/dfinity/ic", package = "ic-management-canister-types" }
-#ic-state-machine-tests = { git = "https://github.com/dfinity/ic", package = "ic-state-machine-tests" }
-ic-solana = { path = "./src/ic-solana" }
-ic-solana-provider = { path = "./src/ic-solana-provider" }
-pocket-ic = "3.1.0"
+ic-test-utilities-load-wasm = { git = "https://github.com/dfinity/ic", rev = "release-2024-09-26_01-31-base" }
+ic-metrics-encoder = "1"
+ic-stable-structures = "0.6"
+ic-types = "0.7"
+ic-utils = "0.39"
+pocket-ic = "6.0"
+
+# other dependencies
+base64 = "0.22"
+futures = "0.3"
+thiserror = "2"
 serde = "1"
-serde_json = "^1.0.117"
-serde_bytes = "^0.11.14"
+serde_json = "1.0"
+serde_bytes = "0.11"
+url = "2.5"
+proptest = "1.6.0"
 
 [profile.release]
 debug = false
 lto = true
 strip = true
-opt-level = 's'
+opt-level = 'z'
 
 # Required by `ic-test-utilities-load-wasm`
 [profile.canister-release]
 inherits = "release"
 
-# This patch is needed due to version conflicts around the zeroize crate
-# More info: https://github.com/solana-labs/solana/blob/master/Cargo.toml#L514
-[patch.crates-io.curve25519-dalek]
-git = "https://github.com/solana-labs/curve25519-dalek.git"
-rev = "b500cdc2a920cd5bff9e2dd974d7b97349d61464"
+#[patch.crates-io]
+## Required by `solana-client` v2.0
+#curve25519-dalek = { git = "https://github.com/solana-labs/curve25519-dalek.git", rev = "b500cdc2a920cd5bff9e2dd974d7b97349d61464" }

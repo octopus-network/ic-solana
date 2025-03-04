@@ -1,12 +1,17 @@
-use crate::types::account::ParsedAccount;
-use crate::types::blockhash::BlockHash;
-use crate::types::compiled_keys::CompiledKeys;
-use crate::types::instruction::{CompiledInstruction, Instruction};
-use crate::types::pubkey::Pubkey;
-use crate::types::{UiCompiledInstruction, UiInstruction};
-use crate::utils::short_vec;
 use candid::CandidType;
 use serde::{Deserialize, Serialize};
+
+use crate::{
+    types::{
+        account::AccountKey,
+        blockhash::BlockHash,
+        compiled_keys::CompiledKeys,
+        instruction::{CompiledInstruction, Instruction},
+        pubkey::Pubkey,
+        UiCompiledInstruction, UiInstruction,
+    },
+    utils::short_vec,
+};
 
 /// Bit mask that indicates whether a serialized message is versioned.
 pub const MESSAGE_VERSION_PREFIX: u8 = 0x80;
@@ -19,9 +24,11 @@ pub struct Message {
 
     /// All the account keys used by this transaction.
     #[serde(with = "short_vec")]
+    #[serde(rename = "accountKeys")]
     pub account_keys: Vec<Pubkey>,
 
     /// The id of a recent ledger entry.
+    #[serde(rename = "recentBlockhash")]
     pub recent_blockhash: BlockHash,
 
     /// Programs that will be executed in sequence and committed in one atomic transaction if all
@@ -39,11 +46,7 @@ impl Message {
         Self::new_with_blockhash(instructions, payer, &BlockHash::default())
     }
 
-    pub fn new_with_blockhash(
-        instructions: &[Instruction],
-        payer: Option<&Pubkey>,
-        blockhash: &BlockHash,
-    ) -> Self {
+    pub fn new_with_blockhash(instructions: &[Instruction], payer: Option<&Pubkey>, blockhash: &BlockHash) -> Self {
         let compiled_keys = CompiledKeys::compile(instructions, payer.cloned());
         let (header, account_keys) = compiled_keys
             .try_into_message_components()
@@ -84,9 +87,7 @@ impl Message {
     }
 
     pub fn program_id(&self, instruction_index: usize) -> Option<&Pubkey> {
-        Some(
-            &self.account_keys[self.instructions.get(instruction_index)?.program_id_index as usize],
-        )
+        Some(&self.account_keys[self.instructions.get(instruction_index)?.program_id_index as usize])
     }
 
     pub fn program_index(&self, instruction_index: usize) -> Option<usize> {
@@ -112,32 +113,58 @@ pub struct MessageHeader {
     /// The number of signatures required for this message to be considered
     /// valid. The signers of those signatures must match the first
     /// `num_required_signatures` of [`Message::account_keys`].
+    #[serde(rename = "numRequiredSignatures")]
     pub num_required_signatures: u8,
 
     /// The last `num_readonly_signed_accounts` of the signed keys are read-only
     /// accounts.
+    #[serde(rename = "numReadonlySignedAccounts")]
     pub num_readonly_signed_accounts: u8,
 
     /// The last `num_readonly_unsigned_accounts` of the unsigned keys are
     /// read-only accounts.
+    #[serde(rename = "numReadonlyUnsignedAccounts")]
     pub num_readonly_unsigned_accounts: u8,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, CandidType)]
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", untagged)]
 pub enum UiMessage {
+    #[serde(rename = "parsed")]
     Parsed(UiParsedMessage),
+    #[serde(rename = "raw")]
     Raw(UiRawMessage),
+}
+
+/// Tagged version of UiMessage
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize, CandidType)]
+#[serde(rename_all = "camelCase")]
+pub enum UiMessageTagged {
+    #[serde(rename = "parsed")]
+    Parsed(UiParsedMessage),
+    #[serde(rename = "raw")]
+    Raw(UiRawMessage),
+}
+
+impl From<UiMessage> for UiMessageTagged {
+    fn from(ui_message: UiMessage) -> Self {
+        match ui_message {
+            UiMessage::Parsed(parsed) => Self::Parsed(parsed),
+            UiMessage::Raw(raw) => Self::Raw(raw),
+        }
+    }
 }
 
 /// A duplicate representation of a Message, in parsed format, for pretty JSON serialization
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, CandidType)]
 #[serde(rename_all = "camelCase")]
 pub struct UiParsedMessage {
-    pub account_keys: Vec<ParsedAccount>,
+    #[serde(rename = "accountKeys")]
+    pub account_keys: Vec<AccountKey>,
+    #[serde(rename = "recentBlockhash")]
     pub recent_blockhash: String,
     pub instructions: Vec<UiInstruction>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none", rename = "addressTableLookups")]
     pub address_table_lookups: Option<Vec<UiAddressTableLookup>>,
 }
 
@@ -146,19 +173,25 @@ pub struct UiParsedMessage {
 #[serde(rename_all = "camelCase")]
 pub struct UiRawMessage {
     pub header: MessageHeader,
+    #[serde(rename = "accountKeys")]
     pub account_keys: Vec<String>,
+    #[serde(rename = "recentBlockhash")]
     pub recent_blockhash: String,
     pub instructions: Vec<UiCompiledInstruction>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none", rename = "addressTableLookups")]
     pub address_table_lookups: Option<Vec<UiAddressTableLookup>>,
 }
 
-/// A duplicate representation of a MessageAddressTableLookup, in raw format, for pretty JSON serialization
+/// A duplicate representation of a MessageAddressTableLookup, in raw format, for pretty JSON
+/// serialization
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, CandidType)]
 #[serde(rename_all = "camelCase")]
 pub struct UiAddressTableLookup {
+    #[serde(rename = "accountKey")]
     pub account_key: String,
+    #[serde(rename = "writableIndexes")]
     pub writable_indexes: Vec<u8>,
+    #[serde(rename = "readonlyIndexes")]
     pub readonly_indexes: Vec<u8>,
 }
 
@@ -182,4 +215,28 @@ fn compile_instruction(ix: &Instruction, keys: &[Pubkey]) -> CompiledInstruction
 
 fn compile_instructions(ixs: &[Instruction], keys: &[Pubkey]) -> Vec<CompiledInstruction> {
     ixs.iter().map(|ix| compile_instruction(ix, keys)).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use candid::{Decode, Encode};
+
+    use super::*;
+    use crate::types::UiParsedMessage;
+
+    #[test]
+    fn test_candid_serialize() {
+        let msg = UiMessageTagged::Parsed(UiParsedMessage {
+            account_keys: vec![],
+            recent_blockhash: "".to_string(),
+            instructions: vec![],
+            address_table_lookups: None,
+        });
+
+        let encoded = Encode!(&msg).unwrap();
+
+        let decoded = Decode!(&encoded, UiMessageTagged).unwrap();
+
+        assert_eq!(msg, decoded);
+    }
 }

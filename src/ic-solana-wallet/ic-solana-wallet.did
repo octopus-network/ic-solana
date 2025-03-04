@@ -1,0 +1,60 @@
+type CommitmentLevel = variant { Finalized; Confirmed; Processed };
+type ConsensusStrategy = variant { Equality; Threshold : nat8 };
+type HttpHeader = record { value : text; name : text };
+type InitArgs = record { schnorr_key : opt text; sol_canister : opt principal };
+type JsonRpcError = record { code : int64; message : text };
+type RejectionCode = variant {
+  NoError;
+  CanisterError;
+  SysTransient;
+  DestinationInvalid;
+  Unknown;
+  SysFatal;
+  CanisterReject;
+};
+type Result = variant { Ok : text; Err : RpcError };
+type RpcApi = record { network : text; headers : opt vec HttpHeader };
+type RpcConfig = record {
+  responseConsensus : opt ConsensusStrategy;
+  responseSizeEstimate : opt nat64;
+};
+type RpcError = variant {
+  JsonRpcError : JsonRpcError;
+  Text : text;
+  InconsistentResponse : vec record { RpcApi; text };
+  ValidationError : text;
+  HttpOutcallError : record { code : RejectionCode; message : text };
+  ParseError : text;
+};
+type RpcSendTransactionConfig = record {
+  encoding : opt UiTransactionEncoding;
+  preflightCommitment : opt CommitmentLevel;
+  maxRetries : opt nat64;
+  minContextSlot : opt nat64;
+  skipPreflight : bool;
+};
+type RpcServices = variant {
+  Mainnet;
+  Custom : vec RpcApi;
+  Testnet;
+  Devnet;
+  Localnet;
+  Provider : vec text;
+};
+type UiTransactionEncoding = variant {
+  jsonParsed;
+  json;
+  base58;
+  base64;
+  binary;
+};
+service : (InitArgs) -> {
+  address : () -> (text);
+  sendTransaction : (
+      RpcServices,
+      opt RpcConfig,
+      text,
+      opt RpcSendTransactionConfig,
+    ) -> (Result) query;
+  signMessage : (text) -> (blob) query;
+}

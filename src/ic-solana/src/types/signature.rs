@@ -1,7 +1,7 @@
+use std::{fmt, str::FromStr};
+
 use serde::{Deserialize, Serialize};
 use serde_big_array::BigArray;
-use std::fmt;
-use std::str::FromStr;
 
 /// Number of bytes in a signature
 pub const SIGNATURE_BYTES: usize = 64;
@@ -19,6 +19,10 @@ impl Default for Signature {
 }
 
 impl Signature {
+    pub fn as_str(&self) -> &str {
+        std::str::from_utf8(&self.0).unwrap_or_default()
+    }
+
     // pub(self) fn verify_verbose(
     //     &self,
     //     pubkey_bytes: &[u8],
@@ -73,9 +77,7 @@ impl FromStr for Signature {
         if s.len() > MAX_BASE58_SIGNATURE_LEN {
             return Err(ParseSignatureError::WrongSize);
         }
-        let bytes = bs58::decode(s)
-            .into_vec()
-            .map_err(|_| ParseSignatureError::Invalid)?;
+        let bytes = bs58::decode(s).into_vec().map_err(|_| ParseSignatureError::Invalid)?;
         Signature::try_from(bytes).map_err(|_| ParseSignatureError::WrongSize)
     }
 }

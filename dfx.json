@@ -1,35 +1,42 @@
 {
-  "dfx": "0.20.0",
   "canisters": {
-    "ic-solana-provider": {
-      "type": "rust",
-      "package": "ic-solana-provider",
-      "candid": "src/ic-solana-provider/ic-solana-provider.did",
-      "gzip": true
-    },
-    "test_canister": {
-      "type": "rust",
-      "package": "test_canister",
-      "candid": "src/test_canister/test_canister.did",
-      "gzip": true
-    },
-    "schnorr_canister": {
+    "solana_rpc": {
       "type": "custom",
-      "candid": "https://github.com/domwoe/schnorr_canister/releases/latest/download/schnorr_canister.did",
-      "wasm": "https://github.com/domwoe/schnorr_canister/releases/latest/download/schnorr_canister.wasm.gz",
-      "remote": {
-        "id": {
-          "ic": "6fwhw-fyaaa-aaaap-qb7ua-cai",
-          "playground": "6fwhw-fyaaa-aaaap-qb7ua-cai"
-        }
-      }
+      "candid": "src/ic-solana-rpc/ic-solana-rpc.did",
+      "wasm": "ic-solana-rpc.wasm.gz",
+      "init_arg": "(record {})",
+      "gzip": true
+    },
+    "solana_rpc_demo": {
+      "type": "custom",
+      "candid": "src/ic-solana-rpc/ic-solana-rpc.did",
+      "wasm": "ic-solana-rpc.wasm.gz",
+      "gzip": true,
+      "init_arg": "(record {demo = opt true})"
+    },
+    "solana_wallet": {
+      "type": "custom",
+      "candid": "src/ic-solana-wallet/ic-solana-wallet.did",
+      "wasm": "ic-solana-wallet.wasm.gz",
+      "gzip": true,
+      "optimize": "cycles"
+    },
+    "e2e": {
+      "dependencies": [
+        "solana_rpc",
+        "solana_wallet"
+      ],
+      "type": "rust",
+      "package": "e2e",
+      "candid": "src/e2e/e2e.did",
+      "gzip": true
     }
   },
-  "networks": {
-    "local": {
-      "bind": "localhost:4943",
-      "type": "ephemeral"
+  "defaults": {
+    "build": {
+      "packtool": ""
     }
   },
+  "dfx": "0.24.1",
   "version": 1
 }

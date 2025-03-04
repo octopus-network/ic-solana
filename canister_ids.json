@@ -1,0 +1,11 @@
+{
+  "e2e": {
+    "local": "bkyz2-fmaaa-aaaaa-qaaaq-cai"
+  },
+  "solana_rpc": {
+    "local": "bd3sg-teaaa-aaaaa-qaaba-cai"
+  },
+  "solana_wallet": {
+    "local": "be2us-64aaa-aaaaa-qaabq-cai"
+  }
+}

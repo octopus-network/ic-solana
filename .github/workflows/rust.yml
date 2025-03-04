@@ -1,0 +1,25 @@
+name: Rust Checks
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  rust-checks:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Run Clippy (non-test)
+        run: cargo clippy -- -D clippy::all -D warnings -A clippy::manual_range_contains
+
+      - name: Run Clippy (tests and benches)
+        run: cargo clippy --tests --benches -- -D clippy::all -D warnings -A clippy::manual_range_contains
+
+      - name: Check Cargo.lock
+        run: cargo update --workspace --locked
