@@ -14,11 +14,7 @@ use serde::{de::DeserializeOwned, Serialize};
 use serde_json::{json, Value};
 
 use crate::{
-    add_metric_entry,
-    constants::*,
-    request::RpcRequest,
-    rpc_client::multi_call::{MultiCallError, MultiCallResults},
-    types::{
+    add_metric_entry, constants::*, eddsa::hash_with_sha256, request::RpcRequest, rpc_client::multi_call::{MultiCallError, MultiCallResults}, types::{
         CommitmentConfig, EncodedConfirmedTransactionWithStatusMeta, Epoch, EpochInfo, EpochSchedule, Pubkey,
         RpcAccountInfoConfig, RpcBlockConfig, RpcBlockProductionConfig, RpcContextConfig, RpcEpochConfig,
         RpcGetVoteAccountsConfig, RpcLargestAccountsConfig, RpcLeaderScheduleConfig, RpcProgramAccountsConfig,
@@ -26,7 +22,7 @@ use crate::{
         RpcSimulateTransactionConfig, RpcSupplyConfig, RpcTokenAccountsFilter, RpcTransactionConfig, Signature, Slot,
         Transaction, TransactionStatus, UiAccount, UiConfirmedBlock, UiTokenAmount, UiTransactionEncoding,
         UnixTimestamp,
-    },
+    }
 };
 
 mod compression;
@@ -136,6 +132,12 @@ impl RpcClient {
                 value: "application/json".to_string(),
             });
         }
+
+        let idempotency_key = hash_with_sha256(&payload.to_string());
+        headers.push(HttpHeader {
+            name: "X-Idempotency".to_string(),
+            value: idempotency_key,
+        });
 
         if self.config.use_compression {
             headers.push(HttpHeader {

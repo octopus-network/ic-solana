@@ -118,12 +118,18 @@ pub fn serve_logs(request: HttpRequest) -> HttpResponse {
 
     match request.raw_query_param("priority").map(Priority::from_str) {
         Some(Ok(priority)) => match priority {
-            Priority::Info => log.push_logs(Priority::Info),
-            Priority::Debug => log.push_logs(Priority::Debug),
+            Priority::INFO => log.push_logs(Priority::INFO),
+            Priority::DEBUG => log.push_logs(Priority::DEBUG),
+            Priority::WARNING => log.push_logs(Priority::WARNING),
+            Priority::ERROR => log.push_logs(Priority::ERROR),
+            Priority::CRITICAL => log.push_logs(Priority::CRITICAL),
         },
         _ => {
-            log.push_logs(Priority::Info);
-            log.push_logs(Priority::Debug);
+            log.push_logs(Priority::INFO);
+            log.push_logs(Priority::DEBUG);
+            log.push_logs(Priority::WARNING);
+            log.push_logs(Priority::ERROR);
+            log.push_logs(Priority::CRITICAL);
         }
     }
 

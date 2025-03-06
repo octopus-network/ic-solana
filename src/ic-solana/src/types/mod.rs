@@ -9,6 +9,7 @@ pub mod config;
 pub mod epoch;
 pub mod fees;
 pub mod filter;
+pub mod hash;
 pub mod instruction;
 pub mod message;
 pub mod pubkey;

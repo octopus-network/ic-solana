@@ -1,11 +1,16 @@
 {
   "canisters": {
-    "solana_rpc": {
-      "type": "custom",
+    "ic_solana_rpc": {
+      "gzip": true,
       "candid": "src/ic-solana-rpc/ic-solana-rpc.did",
-      "wasm": "ic-solana-rpc.wasm.gz",
-      "init_arg": "(record {})",
-      "gzip": true
+      "package": "ic-solana-rpc",
+      "type": "custom",
+      "wasm": "target/wasm32-unknown-unknown/release/ic-solana-rpc.wasm",
+      "metadata": [
+        {
+          "name": "candid:service"
+        }
+      ]
     },
     "solana_rpc_demo": {
       "type": "custom",

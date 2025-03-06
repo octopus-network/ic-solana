@@ -1,16 +1,23 @@
-use std::str::FromStr;
-
 use ic_canister_log::{declare_log_buffer, export as export_logs, GlobalBuffer, Sink};
+use ic_canisters_http_types::{HttpRequest, HttpResponse, HttpResponseBuilder};
 use serde::Deserialize;
+use std::str::FromStr;
+use time::OffsetDateTime;
 
 // High-priority messages.
 declare_log_buffer!(name = INFO_BUF, capacity = 1000);
 
 // Low-priority info messages.
 declare_log_buffer!(name = DEBUG_BUF, capacity = 1000);
+declare_log_buffer!(name = WARNING_BUF, capacity = 1000);
+declare_log_buffer!(name = ERROR_BUF, capacity = 1000);
+declare_log_buffer!(name = CRITICAL_BUF, capacity = 1000);
 
 pub const INFO: PrintProxySink = PrintProxySink("INFO", &INFO_BUF);
 pub const DEBUG: PrintProxySink = PrintProxySink("DEBUG", &DEBUG_BUF);
+pub const WARNING: PrintProxySink = PrintProxySink("WARNING", &WARNING_BUF);
+pub const ERROR: PrintProxySink = PrintProxySink("ERROR", &ERROR_BUF);
+pub const CRITICAL: PrintProxySink = PrintProxySink("WARNING", &CRITICAL_BUF);
 
 pub struct PrintProxySink(&'static str, &'static GlobalBuffer);
 
@@ -23,8 +30,11 @@ impl Sink for PrintProxySink {
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Deserialize, serde::Serialize)]
 pub enum Priority {
-    Info,
-    Debug,
+    INFO,
+    DEBUG,
+    WARNING,
+    ERROR,
+    CRITICAL,
 }
 
 impl FromStr for Priority {
@@ -32,8 +42,8 @@ impl FromStr for Priority {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
-            "info" => Ok(Priority::Info),
-            "debug" => Ok(Priority::Debug),
+            "info" => Ok(Priority::INFO),
+            "debug" => Ok(Priority::DEBUG),
             _ => Err("could not recognize priority".to_string()),
         }
     }
@@ -59,7 +69,9 @@ impl FromStr for Sort {
 
 #[derive(Clone, Debug, Eq, PartialEq, Deserialize, serde::Serialize)]
 pub struct LogEntry {
+    pub canister_id: String,
     pub timestamp: u64,
+    pub time_str: String,
     pub priority: Priority,
     pub file: String,
     pub line: u32,
@@ -75,12 +87,19 @@ pub struct Log {
 impl Log {
     pub fn push_logs(&mut self, priority: Priority) {
         let logs = match priority {
-            Priority::Info => export_logs(&INFO_BUF),
-            Priority::Debug => export_logs(&DEBUG_BUF),
+            Priority::INFO => export_logs(&INFO_BUF),
+            Priority::DEBUG => export_logs(&DEBUG_BUF),
+            Priority::WARNING => export_logs(&WARNING_BUF),
+            Priority::ERROR => export_logs(&ERROR_BUF),
+            Priority::CRITICAL => export_logs(&CRITICAL_BUF),
         };
         for entry in logs {
             self.entries.push(LogEntry {
+                canister_id: ic_cdk::api::id().to_string(),
                 timestamp: entry.timestamp,
+                time_str: OffsetDateTime::from_unix_timestamp_nanos(entry.timestamp as i128)
+                    .unwrap()
+                    .to_string(),
                 counter: entry.counter,
                 priority,
                 file: entry.file.to_string(),
@@ -91,8 +110,11 @@ impl Log {
     }
 
     pub fn push_all(&mut self) {
-        self.push_logs(Priority::Info);
-        self.push_logs(Priority::Debug);
+        self.push_logs(Priority::INFO);
+        self.push_logs(Priority::DEBUG);
+        self.push_logs(Priority::WARNING);
+        self.push_logs(Priority::ERROR);
+        self.push_logs(Priority::CRITICAL);
     }
 
     pub fn serialize_logs(&self, max_body_size: usize) -> String {
@@ -143,8 +165,12 @@ mod tests {
 
     fn info_log_entry_with_timestamp(timestamp: u64) -> LogEntry {
         LogEntry {
+            canister_id: ic_cdk::api::id().to_string(),
             timestamp,
-            priority: Priority::Info,
+            time_str: OffsetDateTime::from_unix_timestamp_nanos(timestamp as i128)
+                .unwrap()
+                .to_string(),
+            priority: Priority::INFO,
             file: String::default(),
             line: 0,
             message: String::default(),
@@ -180,8 +206,10 @@ mod tests {
             let mut entries: Vec<LogEntry> = vec![];
             for _ in 0..number_of_entries {
                 entries.push(LogEntry {
+                    canister_id: ic_cdk::api::id().to_string(),
                     timestamp: 0,
-                    priority: Priority::Info,
+                    time_str: "0".into(),
+                    priority: Priority::INFO,
                     file: String::default(),
                     line: 0,
                     message: "1".repeat(entry_size),
@@ -220,8 +248,10 @@ mod tests {
 
         for _ in 0..10 {
             entries.push(LogEntry {
+                canister_id: ic_cdk::api::id().to_string(),
                 timestamp: 0,
-                priority: Priority::Info,
+                time_str: "0".into(),
+                priority: Priority::INFO,
                 file: String::default(),
                 line: 0,
                 message: String::default(),
@@ -234,8 +264,10 @@ mod tests {
         let small_len = serde_json::to_string(&log).unwrap_or_default().len();
 
         entries.push(LogEntry {
+            canister_id: ic_cdk::api::id().to_string(),
             timestamp: 0,
-            priority: Priority::Info,
+            time_str: "0".into(),
+            priority: Priority::INFO,
             file: String::default(),
             line: 0,
             message: "1".repeat(MAX_BODY_SIZE),
@@ -256,8 +288,10 @@ mod tests {
         const MAX_BODY_SIZE: usize = 3_000_000;
 
         entries.push(LogEntry {
+            canister_id: ic_cdk::api::id().to_string(),
             timestamp: 0,
-            priority: Priority::Info,
+            time_str: "0".into(),
+            priority: Priority::INFO,
             file: String::default(),
             line: 0,
             message: "1".repeat(MAX_BODY_SIZE),
@@ -289,5 +323,83 @@ mod tests {
         let serialized_log_with_3_entries = log_with_3_entries.serialize_logs(serialized_log_with_2_entries.len());
 
         assert_eq!(serialized_log_with_3_entries, serialized_log_with_2_entries);
+    }
+}
+
+pub fn http_log(req: HttpRequest, enable_debug: bool) -> HttpResponse {
+    use std::str::FromStr;
+    let max_skip_timestamp = match req.raw_query_param("time") {
+        Some(arg) => match u64::from_str(arg) {
+            Ok(value) => value,
+            Err(_) => {
+                return HttpResponseBuilder::bad_request()
+                    .with_body_and_content_length("failed to parse the 'time' parameter")
+                    .build()
+            }
+        },
+        None => 0,
+    };
+
+    let limit = match req.raw_query_param("limit") {
+        Some(arg) => match u64::from_str(arg) {
+            Ok(value) => value,
+            Err(_) => {
+                return HttpResponseBuilder::bad_request()
+                    .with_body_and_content_length("failed to parse the 'time' parameter")
+                    .build()
+            }
+        },
+        None => 1000,
+    };
+
+    let offset = match req.raw_query_param("offset") {
+        Some(arg) => match u64::from_str(arg) {
+            Ok(value) => value,
+            Err(_) => {
+                return HttpResponseBuilder::bad_request()
+                    .with_body_and_content_length("failed to parse the 'time' parameter")
+                    .build()
+            }
+        },
+        None => 0,
+    };
+
+    let mut entries: Log = Default::default();
+    if enable_debug {
+        merge_log(&mut entries, &DEBUG_BUF, Priority::DEBUG);
+    }
+    merge_log(&mut entries, &INFO_BUF, Priority::INFO);
+    merge_log(&mut entries, &WARNING_BUF, Priority::WARNING);
+    merge_log(&mut entries, &ERROR_BUF, Priority::ERROR);
+    merge_log(&mut entries, &CRITICAL_BUF, Priority::CRITICAL);
+    entries.entries.retain(|entry| entry.timestamp >= max_skip_timestamp);
+    entries.entries.sort_by(|a, b| a.timestamp.cmp(&b.timestamp));
+    let logs = entries
+        .entries
+        .into_iter()
+        .skip(offset as usize)
+        .take(limit as usize)
+        .collect::<Vec<_>>();
+    HttpResponseBuilder::ok()
+        .header("Content-Type", "application/json; charset=utf-8")
+        .with_body_and_content_length(serde_json::to_string(&logs).unwrap_or_default())
+        .build()
+}
+
+fn merge_log(entries: &mut Log, buffer: &'static GlobalBuffer, priority: Priority) {
+    let canister_id = ic_cdk::api::id();
+    for entry in export_logs(buffer) {
+        entries.entries.push(LogEntry {
+            timestamp: entry.timestamp,
+            canister_id: canister_id.to_string(),
+            time_str: OffsetDateTime::from_unix_timestamp_nanos(entry.timestamp as i128)
+                .unwrap()
+                .to_string(),
+            counter: entry.counter,
+            priority: priority,
+            file: entry.file.to_string(),
+            line: entry.line,
+            message: entry.message,
+        });
     }
 }
