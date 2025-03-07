@@ -151,7 +151,8 @@ impl RpcClient {
             value: "application/json".to_string(),
         }];
         // add idempotency_key
-        let idempotency_key = hash_with_sha256(payload);
+        let idempotency_key =
+            hash_with_sha256(format!("{}/{}", self.cluster.url(), payload).as_str());
 
         headers.push(HttpHeader {
             name: "X-Idempotency".to_string(),
@@ -164,12 +165,6 @@ impl RpcClient {
                 value: forward,
             });
         }
-
-        log!(
-            DEBUG,
-            "ic-solana::rpc_client::call: http header: {:?}",
-            headers
-        );
 
         let request = CanisterHttpRequestArgument {
             url: self.cluster.url().to_string(),
