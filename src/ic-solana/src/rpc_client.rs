@@ -14,7 +14,12 @@ use serde::{de::DeserializeOwned, Serialize};
 use serde_json::{json, Value};
 
 use crate::{
-    add_metric_entry, constants::*, eddsa::hash_with_sha256, request::RpcRequest, rpc_client::multi_call::{MultiCallError, MultiCallResults}, types::{
+    add_metric_entry,
+    constants::*,
+    eddsa::hash_with_sha256,
+    request::RpcRequest,
+    rpc_client::multi_call::{MultiCallError, MultiCallResults},
+    types::{
         CommitmentConfig, EncodedConfirmedTransactionWithStatusMeta, Epoch, EpochInfo, EpochSchedule, Pubkey,
         RpcAccountInfoConfig, RpcBlockConfig, RpcBlockProductionConfig, RpcContextConfig, RpcEpochConfig,
         RpcGetVoteAccountsConfig, RpcLargestAccountsConfig, RpcLeaderScheduleConfig, RpcProgramAccountsConfig,
@@ -22,7 +27,7 @@ use crate::{
         RpcSimulateTransactionConfig, RpcSupplyConfig, RpcTokenAccountsFilter, RpcTransactionConfig, Signature, Slot,
         Transaction, TransactionStatus, UiAccount, UiConfirmedBlock, UiTokenAmount, UiTransactionEncoding,
         UnixTimestamp,
-    }
+    },
 };
 
 mod compression;
@@ -133,9 +138,14 @@ impl RpcClient {
             });
         }
 
-        let idempotency_key = hash_with_sha256(&format!("{}{}", provider.network, payload));
+        let forward_host = headers
+            .iter()
+            .find(|header| header.name == "x-forward-host")
+            .map_or(String::default(), |header| header.value.clone());
+
+        let idempotency_key = hash_with_sha256(&format!("{}{}", forward_host, payload));
         headers.push(HttpHeader {
-            name: "X-Idempotency".to_string(),
+            name: "idempotency-key".to_string(),
             value: idempotency_key,
         });
 
