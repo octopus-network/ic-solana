@@ -177,12 +177,6 @@ impl RpcClient {
         };
 
         let url = self.cluster.url();
-        // let nodes_in_standard_subnet = 13;
-
-        // let cycles = http_request_required_cycles(
-        //     &request,
-        //     self.nodes_in_subnet.unwrap_or(nodes_in_standard_subnet),
-        // );
 
         let cycles = get_http_request_cost(
             request.body.as_ref().map_or(0, |b| b.len() as u64),

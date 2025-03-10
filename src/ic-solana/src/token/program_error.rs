@@ -2,8 +2,8 @@
 
 #![allow(clippy::arithmetic_side_effects)]
 use crate::token::instruction_error::InstructionError;
-#[cfg(feature = "borsh")]
-use borsh::io::Error as BorshIoError;
+// #[cfg(feature = "borsh")]
+// use borsh::io::Error as BorshIoError;
 use serde::{Deserialize, Serialize};
 
 use {num_traits::ToPrimitive, std::convert::TryFrom, thiserror::Error};
@@ -279,9 +279,8 @@ where
     }
 }
 
-#[cfg(feature = "borsh")]
-impl From<BorshIoError> for ProgramError {
-    fn from(error: BorshIoError) -> Self {
-        Self::BorshIoError(format!("{error}"))
-    }
-}
+// impl From<BorshIoError> for ProgramError {
+//     fn from(error: BorshIoError) -> Self {
+//         Self::BorshIoError(format!("{error}"))
+//     }
+// }
