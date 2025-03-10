@@ -133,7 +133,7 @@ impl RpcClient {
             });
         }
 
-        let idempotency_key = hash_with_sha256(&payload.to_string());
+        let idempotency_key = hash_with_sha256(&format!("{}{}", provider.network, payload));
         headers.push(HttpHeader {
             name: "X-Idempotency".to_string(),
             value: idempotency_key,
