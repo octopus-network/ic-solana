@@ -176,17 +176,11 @@ impl RpcClient {
             transform: Some(transform),
         };
 
-        let url = self.cluster.url();
-
         let cycles = get_http_request_cost(
             request.body.as_ref().map_or(0, |b| b.len() as u64),
             request.max_response_bytes.unwrap_or(2 * 1024 * 1024), // default 2Mb
         );
 
-        log!(
-            DEBUG,
-            "Calling url: {url} with payload: {payload}. Cycles: {cycles}"
-        );
         let start = api::time();
         match http_request(request, cycles).await {
             Ok((response,)) => {
@@ -195,10 +189,9 @@ impl RpcClient {
 
                 log!(
                     DEBUG,
-                    "Got response (with {} bytes): {} from url: {} with status: {} the time elapsed: {}",
+                    "Got response (with {} bytes): {} ,status: {} the time elapsed: {}",
                     response.body.len(),
                     String::from_utf8_lossy(&response.body),
-                    url,
                     response.status,
                     elapsed
                 );
@@ -213,10 +206,9 @@ impl RpcClient {
                 let elapsed = (end - start) / 1_000_000_000;
                 log!(
                     ERROR,
-                    "Got response  error : {:?},{} from url: {} ,the time elapsed: {}",
+                    "Got response  error : {:?},{} and the time elapsed: {}",
                     r,
                     m,
-                    url,
                     elapsed
                 );
                 Err(RpcError::RpcRequestError(format!("({r:?}) {m:?}")))
