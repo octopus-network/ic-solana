@@ -1,5 +1,4 @@
-#[cfg(feature = "borsh")]
-use borsh::BorshSerialize;
+// use borsh::BorshSerialize;
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;

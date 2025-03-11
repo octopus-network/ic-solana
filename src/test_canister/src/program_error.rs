@@ -2,7 +2,6 @@
 
 #![allow(clippy::arithmetic_side_effects)]
 use crate::instruction_error::InstructionError;
-#[cfg(feature = "borsh")]
 use borsh::io::Error as BorshIoError;
 use serde::{Deserialize, Serialize};
 
@@ -279,7 +278,6 @@ where
     }
 }
 
-#[cfg(feature = "borsh")]
 impl From<BorshIoError> for ProgramError {
     fn from(error: BorshIoError) -> Self {
         Self::BorshIoError(format!("{error}"))

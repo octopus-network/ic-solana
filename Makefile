@@ -10,7 +10,7 @@ help: ## Show this help
 
 .PHONY: start
 start: ## Start the canisters
-	RUST_BACKTRACE=1 dfx start --clean
+	RUST_BACKTRACE=1 dfx start --clean --background
 
 .PHONY: build
 build: ## Build the canisters
