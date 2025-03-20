@@ -16,7 +16,6 @@ use serde_json::{json, Value};
 use crate::{
     add_metric_entry,
     constants::*,
-    eddsa::hash_with_sha256,
     request::RpcRequest,
     rpc_client::multi_call::{MultiCallError, MultiCallResults},
     types::{
@@ -138,16 +137,16 @@ impl RpcClient {
             });
         }
 
-        let forward_host = headers
-            .iter()
-            .find(|header| header.name == "x-forward-host")
-            .map_or(String::default(), |header| header.value.clone());
+        // let forward_host = headers
+        //     .iter()
+        //     .find(|header| header.name == "x-forward-host")
+        //     .map_or(String::default(), |header| header.value.clone());
 
-        let idempotency_key = hash_with_sha256(&format!("{}{}", forward_host, payload));
-        headers.push(HttpHeader {
-            name: "idempotency-key".to_string(),
-            value: idempotency_key,
-        });
+        // let idempotency_key = hash_with_sha256(&format!("{}{}", forward_host, payload));
+        // headers.push(HttpHeader {
+        //     name: "idempotency-key".to_string(),
+        //     value: idempotency_key,
+        // });
 
         if self.config.use_compression {
             headers.push(HttpHeader {
@@ -203,10 +202,7 @@ impl RpcClient {
             add_metric_entry!(cycles_charged, (rpc_method.clone(), rpc_host.clone()), cycles_cost);
         }
 
-        log!(
-            DEBUG,
-            "Calling url: {url} with payload: {payload}. Cycles: {cycles_cost}"
-        );
+        log!(DEBUG, "payload: {payload}. Cycles: {cycles_cost}");
 
         add_metric_entry!(requests, (rpc_method.clone(), rpc_host.clone()), 1);
 
@@ -221,10 +217,9 @@ impl RpcClient {
 
                 log!(
                     DEBUG,
-                    "Got response (with {} bytes): {} from url: {} with status: {}",
+                    "Got response (with {} bytes): {} status: {}",
                     body.len(),
                     body,
-                    url,
                     response.status
                 );
 
@@ -1002,6 +997,29 @@ impl RpcClient {
         )
         .await?
         .into_optional_rpc_result()
+    }
+
+    /// Returns transaction details for a confirmed transaction.
+    ///
+    /// Method relies on the `getTransaction` RPC call to get the transaction data:
+    ///   https://solana.com/docs/rpc/http/getTransaction
+    pub async fn get_raw_transaction(
+        &self,
+        signature: &Signature,
+        config: Option<RpcTransactionConfig>,
+    ) -> RpcResult<Vec<u8>> {
+        let params = (signature.to_string(), config.unwrap_or_default());
+        let payload = RpcRequest::GetTransaction.build_json(self.next_request_id(), params);
+        let max_response_bytes =
+            self.response_size_estimate(self.response_size_estimate(TRANSACTION_RESPONSE_SIZE_ESTIMATE));
+        let results = self.parallel_call(&payload, Some(max_response_bytes)).await;
+
+        let bytes = Self::process_result(
+            RpcRequest::GetTransaction,
+            MultiCallResults::from_non_empty_iter(self.providers.iter().cloned().zip(results.into_iter()))
+                .reduce(self.consensus_strategy()),
+        )?;
+        Ok(bytes)
     }
 
     /// Returns the current transactions count from the ledger.

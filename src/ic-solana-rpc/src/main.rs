@@ -596,6 +596,20 @@ pub async fn sol_get_transaction(
     Ok(response.map(|tx| tx.into()))
 }
 
+#[update(name = "sol_getRawTransaction")]
+#[candid_method(rename = "sol_getRawTransaction")]
+pub async fn sol_get_raw_transaction(
+    source: RpcServices,
+    config: Option<RpcConfig>,
+    signature: String,
+    params: Option<RpcTransactionConfig>,
+) -> RpcResult<Vec<u8>> {
+    let client = rpc_client(source, config);
+    let signature = parse_signature(&signature)?;
+    let response = client.get_raw_transaction(&signature, params).await?;
+    Ok(response)
+}
+
 /// Returns the current number of transactions from the ledger.
 #[update(name = "sol_getTransactionCount")]
 #[candid_method(rename = "sol_getTransactionCount")]

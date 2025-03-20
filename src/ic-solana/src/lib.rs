@@ -1,5 +1,5 @@
 pub mod constants;
-pub mod eddsa;
+// pub mod eddsa;
 pub mod logs;
 pub mod metrics;
 pub mod request;

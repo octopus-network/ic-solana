@@ -1,5 +1,6 @@
 use std::{fmt, mem, str::FromStr};
 
+use borsh_derive::{BorshDeserialize, BorshSerialize};
 use candid::CandidType;
 use ic_crypto_ed25519::PublicKey;
 use serde::{Deserialize, Serialize};
@@ -16,7 +17,21 @@ const MAX_BASE58_LEN: usize = 44;
 
 const PDA_MARKER: &[u8; 21] = b"ProgramDerivedAddress";
 
-#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, CandidType)]
+#[derive(
+    BorshSerialize,
+    BorshDeserialize,
+    Serialize,
+    Deserialize,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Default,
+    CandidType,
+)]
 pub struct Pubkey(pub(crate) [u8; PUBKEY_BYTES]);
 
 #[derive(Error, Debug, Serialize, Clone, PartialEq, Eq)]
@@ -136,10 +151,7 @@ impl Pubkey {
         }
     }
 
-    pub fn create_program_address(
-        seeds: &[&[u8]],
-        program_id: &Pubkey,
-    ) -> Result<Pubkey, PubkeyError> {
+    pub fn create_program_address(seeds: &[&[u8]], program_id: &Pubkey) -> Result<Pubkey, PubkeyError> {
         if seeds.len() > MAX_SEEDS {
             return Err(PubkeyError::MaxSeedLengthExceeded);
         }
@@ -179,13 +191,8 @@ pub enum PubkeyError {
 
 #[allow(clippy::used_underscore_binding)]
 pub fn bytes_are_curve_point<T: AsRef<[u8]>>(_bytes: T) -> bool {
-    #[cfg(not(target_os = "solana"))]
-    {
-        curve25519_dalek::edwards::CompressedEdwardsY::from_slice(_bytes.as_ref())
-            .unwrap()
-            .decompress()
-            .is_some()
-    }
-    #[cfg(target_os = "solana")]
-    unimplemented!();
+    curve25519_dalek::edwards::CompressedEdwardsY::from_slice(_bytes.as_ref())
+        .unwrap()
+        .decompress()
+        .is_some()
 }
