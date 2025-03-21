@@ -137,17 +137,6 @@ impl RpcClient {
             });
         }
 
-        // let forward_host = headers
-        //     .iter()
-        //     .find(|header| header.name == "x-forward-host")
-        //     .map_or(String::default(), |header| header.value.clone());
-
-        // let idempotency_key = hash_with_sha256(&format!("{}{}", forward_host, payload));
-        // headers.push(HttpHeader {
-        //     name: "idempotency-key".to_string(),
-        //     value: idempotency_key,
-        // });
-
         if self.config.use_compression {
             headers.push(HttpHeader {
                 name: "Accept-Encoding".to_string(),
