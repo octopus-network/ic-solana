@@ -118,7 +118,7 @@ impl Log {
     }
 
     pub fn serialize_logs(&self, max_body_size: usize) -> String {
-        let mut entries_json: String = serde_json::to_string(&self).unwrap_or_default();
+        let mut entries_json: String = serde_json::to_string(&self.entries).unwrap_or_default();
 
         if entries_json.len() > max_body_size {
             let mut left = 0;
@@ -128,7 +128,7 @@ impl Log {
                 let mid = left + (right - left) / 2;
                 let mut temp_log = self.clone();
                 temp_log.entries.truncate(mid);
-                let temp_entries_json = serde_json::to_string(&temp_log).unwrap_or_default();
+                let temp_entries_json = serde_json::to_string(&temp_log.entries).unwrap_or_default();
 
                 if temp_entries_json.len() <= max_body_size {
                     entries_json = temp_entries_json;
